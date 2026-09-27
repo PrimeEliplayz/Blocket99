@@ -1,1 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Blocket</title>
 
+    <style>
+        body {
+            margin: 0;
+            background-color: black;
+            font-family: Arial, sans-serif;
+        }
+
+        .title {
+            text-align: center;
+            margin-top: 40px;
+            font-size: 40px;
+            color: blueviolet;
+        }
+
+        .description {
+            text-align: center;
+            color: blueviolet;
+        }
+
+        .login-box {
+            width: 350px;
+            padding: 30px;
+            margin: 60px auto;
+            background-color: #3b2b63;
+            border-radius: 15px;
+            text-align: center;
+        }
+
+        .login-button,
+        .signup-button {
+            width: 100%;
+            padding: 14px;
+            margin-top: 12px;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        .login-button {
+            background-color: blueviolet;
+            color: white;
+        }
+
+        .signup-button {
+            background-color: white;
+            color: #3b2b63;
+        }
+    </style>
+</head>
+
+<body>
+
+    <h1 class="title">Blocket</h1>
+
+    <p class="description">A BPS</p>
+
+    <div class="login-box">
+        <button class="login-button" onclick="location.href='login.html'">
+            Login
+        </button>
+
+        <button class="signup-button" onclick="location.href='signup.html'">
+            Sign Up
+        </button>
+    </div>
+
+</body>
+</html>
