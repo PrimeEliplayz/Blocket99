@@ -4,9 +4,13 @@ create table if not exists public.profiles (
     id uuid primary key references auth.users (id) on delete cascade,
     username text not null unique
         check (username ~ '^[a-z0-9_]{3,24}$'),
+    avatar_path text not null default 'assets/badges/Gold Doubloon.webp',
     created_at timestamptz not null default now(),
     updated_at timestamptz not null default now()
 );
+
+alter table public.profiles
+    add column if not exists avatar_path text not null default 'assets/badges/Gold Doubloon.webp';
 
 create table if not exists public.player_stats (
     user_id uuid primary key references public.profiles (id) on delete cascade,
@@ -139,10 +143,7 @@ on public.player_stats for select to authenticated
 using ((select auth.uid()) = user_id);
 
 drop policy if exists "Users can update their own stats" on public.player_stats;
-create policy "Users can update their own stats"
-on public.player_stats for update to authenticated
-using ((select auth.uid()) = user_id)
-with check ((select auth.uid()) = user_id);
+revoke insert, update, delete on public.player_stats from authenticated;
 
 drop policy if exists "Authenticated users can read badges" on public.badges;
 create policy "Authenticated users can read badges"
@@ -154,8 +155,10 @@ create policy "Users can read their own earned badges"
 on public.user_badges for select to authenticated
 using ((select auth.uid()) = user_id);
 
-grant select, update on public.profiles to authenticated;
-grant select, update on public.player_stats to authenticated;
+revoke insert, update, delete on public.profiles from authenticated;
+grant select on public.profiles to authenticated;
+grant update (username) on public.profiles to authenticated;
+grant select on public.player_stats to authenticated;
 grant select on public.badges to authenticated;
 grant select on public.user_badges to authenticated;
 

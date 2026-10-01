@@ -82,6 +82,27 @@ export async function getCurrentUser() {
     return { user: data.user, error };
 }
 
+export async function getStatsPageData(userId) {
+    if (!supabase) return { error: new Error('Supabase is not configured.') };
+
+    const [profileResult, statsResult, badgesResult, earnedBadgesResult] = await Promise.all([
+        supabase.from('profiles').select('username, avatar_path, created_at').eq('id', userId).single(),
+        supabase.from('player_stats').select('games_played, wins, losses, total_score').eq('user_id', userId).single(),
+        supabase.from('badges').select('id, name, description, image_path').order('name'),
+        supabase.from('user_badges').select('badge_id').eq('user_id', userId)
+    ]);
+
+    const error = profileResult.error || statsResult.error || badgesResult.error || earnedBadgesResult.error;
+    if (error) return { error };
+
+    return {
+        profile: profileResult.data,
+        stats: statsResult.data,
+        badges: badgesResult.data,
+        earnedBadgeIds: new Set(earnedBadgesResult.data.map((badge) => badge.badge_id))
+    };
+}
+
 export async function signOut() {
     if (!supabase) return { error: new Error('Supabase is not configured.') };
 

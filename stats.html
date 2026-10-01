@@ -77,6 +77,66 @@
         h1 { margin: 0; font-size: clamp(28px, 5vw, 40px); }
         .intro { margin: 10px 0 28px; color: var(--muted); }
 
+        .profile-heading {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            margin-bottom: 32px;
+        }
+
+        .profile-avatar {
+            width: 104px;
+            height: 104px;
+            flex: 0 0 104px;
+            border: 2px solid var(--accent);
+            border-radius: 50%;
+            object-fit: cover;
+            background: var(--panel);
+        }
+
+        .profile-username { margin: 8px 0 0; color: var(--muted); }
+
+        .section-heading {
+            display: flex;
+            align-items: baseline;
+            justify-content: space-between;
+            gap: 16px;
+            margin: 38px 0 14px;
+        }
+
+        h2 { margin: 0; font-size: 22px; }
+        .section-count { color: var(--muted); font-size: 14px; }
+
+        .badge-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+            gap: 10px;
+        }
+
+        .badge-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            min-width: 0;
+            min-height: 80px;
+            padding: 12px;
+            border: 1px solid var(--line);
+            border-radius: 7px;
+            background: var(--panel);
+        }
+
+        .badge-item.is-locked { opacity: 0.48; }
+
+        .badge-image {
+            width: 48px;
+            height: 48px;
+            flex: 0 0 48px;
+            object-fit: contain;
+        }
+
+        .badge-name { margin: 0 0 4px; font-weight: 700; }
+        .badge-description { margin: 0; color: var(--muted); font-size: 12px; }
+
         .stats-grid {
             display: grid;
             grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -109,6 +169,12 @@
             main { margin-top: 36px; }
             .stats-grid { grid-template-columns: 1fr; }
             .stat + .stat { border-left: 0; border-top: 1px solid var(--line); }
+            .profile-avatar { width: 84px; height: 84px; flex-basis: 84px; }
+            .badge-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        }
+
+        @media (max-width: 380px) {
+            .badge-grid { grid-template-columns: 1fr; }
         }
     </style>
 </head>
@@ -126,25 +192,44 @@
         <h1>Stats</h1>
         <p class="intro">Your Blocket account overview.</p>
 
+        <section class="profile-heading" aria-label="Player profile">
+            <img class="profile-avatar" id="profile-avatar" src="assets/badges/Gold%20Doubloon.webp" alt="Gold Doubloon profile picture">
+            <div>
+                <p class="eyebrow">Player profile</p>
+                <p class="profile-username" id="profile-username">Loading...</p>
+            </div>
+        </section>
+
         <section class="stats-grid" aria-label="Account statistics">
             <article class="stat">
-                <p class="stat-label">Signed in as</p>
-                <p class="stat-value" id="account-email">Loading...</p>
+                <p class="stat-label">Games played</p>
+                <p class="stat-value" id="games-played">Loading...</p>
             </article>
             <article class="stat">
-                <p class="stat-label">Email status</p>
-                <p class="stat-value" id="email-status">Loading...</p>
+                <p class="stat-label">Wins</p>
+                <p class="stat-value" id="wins">Loading...</p>
             </article>
             <article class="stat">
-                <p class="stat-label">Member since</p>
-                <p class="stat-value" id="member-since">Loading...</p>
+                <p class="stat-label">Losses</p>
+                <p class="stat-value" id="losses">Loading...</p>
             </article>
+            <article class="stat">
+                <p class="stat-label">Total score</p>
+                <p class="stat-value" id="total-score">Loading...</p>
+            </article>
+        </section>
+        <section aria-labelledby="badges-title">
+            <div class="section-heading">
+                <h2 id="badges-title">Badge collection</h2>
+                <span class="section-count" id="badge-count"></span>
+            </div>
+            <div class="badge-grid" id="badge-grid"></div>
         </section>
         <p class="message" id="stats-message" role="status" aria-live="polite"></p>
     </main>
 
     <script type="module">
-        import { getCurrentUser, signOut } from './auth.js';
+        import { getCurrentUser, getStatsPageData, signOut } from './auth.js';
 
         const message = document.getElementById('stats-message');
         const { user, error } = await getCurrentUser();
@@ -152,11 +237,46 @@
         if (error || !user) {
             window.location.replace('login.html');
         } else {
-            document.getElementById('account-email').textContent = user.email || 'No email available';
-            document.getElementById('email-status').textContent = user.email_confirmed_at ? 'Verified' : 'Not verified';
-            document.getElementById('member-since').textContent = user.created_at
-                ? new Date(user.created_at).toLocaleDateString()
-                : 'Unknown';
+            const account = await getStatsPageData(user.id);
+
+            if (account.error) {
+                message.textContent = account.error.message || 'Could not load your profile and badges.';
+                message.dataset.state = 'error';
+            } else {
+                document.getElementById('profile-username').textContent = account.profile.username;
+                document.getElementById('profile-avatar').src = account.profile.avatar_path;
+                document.getElementById('games-played').textContent = account.stats.games_played.toLocaleString();
+                document.getElementById('wins').textContent = account.stats.wins.toLocaleString();
+                document.getElementById('losses').textContent = account.stats.losses.toLocaleString();
+                document.getElementById('total-score').textContent = account.stats.total_score.toLocaleString();
+
+                const earnedCount = account.earnedBadgeIds.size;
+                document.getElementById('badge-count').textContent = `${earnedCount} / ${account.badges.length} earned`;
+
+                for (const badge of account.badges) {
+                    const isEarned = account.earnedBadgeIds.has(badge.id);
+                    const item = document.createElement('article');
+                    item.className = `badge-item${isEarned ? '' : ' is-locked'}`;
+
+                    const image = document.createElement('img');
+                    image.className = 'badge-image';
+                    image.src = badge.image_path;
+                    image.alt = '';
+                    image.loading = 'lazy';
+
+                    const details = document.createElement('div');
+                    const name = document.createElement('p');
+                    name.className = 'badge-name';
+                    name.textContent = badge.name;
+                    const description = document.createElement('p');
+                    description.className = 'badge-description';
+                    description.textContent = isEarned ? badge.description : 'Locked';
+
+                    details.append(name, description);
+                    item.append(image, details);
+                    document.getElementById('badge-grid').append(item);
+                }
+            }
         }
 
         document.getElementById('sign-out').addEventListener('click', async (event) => {
