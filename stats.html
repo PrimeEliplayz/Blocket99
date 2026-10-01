@@ -94,48 +94,71 @@
             background: var(--panel);
         }
 
-        .profile-username { margin: 8px 0 0; color: var(--muted); }
-
-        .section-heading {
-            display: flex;
-            align-items: baseline;
-            justify-content: space-between;
-            gap: 16px;
-            margin: 38px 0 14px;
-        }
-
-        h2 { margin: 0; font-size: 22px; }
-        .section-count { color: var(--muted); font-size: 14px; }
+        .profile-info { min-width: 0; }
+        .profile-username { margin: 8px 0 10px; color: var(--muted); }
 
         .badge-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-            gap: 10px;
+            grid-template-columns: repeat(7, 58px);
+            gap: 8px;
         }
 
-        .badge-item {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            min-width: 0;
-            min-height: 80px;
-            padding: 12px;
-            border: 1px solid var(--line);
-            border-radius: 7px;
-            background: var(--panel);
+        .badge-button {
+            display: grid;
+            place-items: center;
+            width: 58px;
+            height: 58px;
+            padding: 0;
+            overflow: hidden;
+            border: 2px solid var(--line);
+            border-radius: 50%;
+            background: var(--panel-soft);
+            cursor: pointer;
         }
 
-        .badge-item.is-locked { opacity: 0.48; }
+        .badge-button:hover,
+        .badge-button:focus-visible { border-color: var(--accent); }
 
         .badge-image {
-            width: 48px;
-            height: 48px;
-            flex: 0 0 48px;
-            object-fit: contain;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transform: scale(3.2);
+            pointer-events: none;
         }
 
-        .badge-name { margin: 0 0 4px; font-weight: 700; }
-        .badge-description { margin: 0; color: var(--muted); font-size: 12px; }
+        .badge-button.is-locked { opacity: 0.35; filter: grayscale(1); }
+
+        .badge-dialog {
+            width: min(360px, calc(100% - 32px));
+            padding: 24px;
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            background: var(--panel);
+            color: var(--text);
+            text-align: center;
+        }
+
+        .badge-dialog::backdrop { background: rgb(0 0 0 / 70%); }
+        .badge-dialog-icon {
+            width: 96px;
+            height: 96px;
+            margin: 0 auto;
+            overflow: hidden;
+            border: 2px solid var(--line);
+            border-radius: 50%;
+            background: var(--panel-soft);
+        }
+
+        .badge-dialog-image {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transform: scale(3.2);
+        }
+        .badge-dialog h2 { margin: 12px 0 8px; font-size: 20px; }
+        .badge-dialog-description { margin: 0 0 18px; color: var(--muted); }
+        .badge-dialog-state { margin: 0 0 14px; color: var(--accent); font-size: 13px; }
 
         .stats-grid {
             display: grid;
@@ -169,12 +192,17 @@
             main { margin-top: 36px; }
             .stats-grid { grid-template-columns: 1fr; }
             .stat + .stat { border-left: 0; border-top: 1px solid var(--line); }
-            .profile-avatar { width: 84px; height: 84px; flex-basis: 84px; }
-            .badge-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+            .profile-heading { gap: 10px; }
+            .profile-avatar { width: 70px; height: 70px; flex-basis: 70px; }
+            .badge-grid { grid-template-columns: repeat(5, 44px); gap: 4px; }
+            .badge-button { width: 44px; height: 44px; }
         }
 
         @media (max-width: 380px) {
-            .badge-grid { grid-template-columns: 1fr; }
+            .profile-heading { gap: 8px; }
+            .profile-avatar { width: 58px; height: 58px; flex-basis: 58px; }
+            .badge-grid { grid-template-columns: repeat(4, 36px); gap: 4px; }
+            .badge-button { width: 36px; height: 36px; }
         }
     </style>
 </head>
@@ -194,9 +222,10 @@
 
         <section class="profile-heading" aria-label="Player profile">
             <img class="profile-avatar" id="profile-avatar" src="assets/badges/Gold%20Doubloon.webp" alt="Gold Doubloon profile picture">
-            <div>
+            <div class="profile-info">
                 <p class="eyebrow">Player profile</p>
                 <p class="profile-username" id="profile-username">Loading...</p>
+                <div class="badge-grid" id="badge-grid" aria-label="Badge collection"></div>
             </div>
         </section>
 
@@ -218,15 +247,18 @@
                 <p class="stat-value" id="total-score">Loading...</p>
             </article>
         </section>
-        <section aria-labelledby="badges-title">
-            <div class="section-heading">
-                <h2 id="badges-title">Badge collection</h2>
-                <span class="section-count" id="badge-count"></span>
-            </div>
-            <div class="badge-grid" id="badge-grid"></div>
-        </section>
         <p class="message" id="stats-message" role="status" aria-live="polite"></p>
     </main>
+
+    <dialog class="badge-dialog" id="badge-dialog" aria-labelledby="badge-dialog-title">
+        <div class="badge-dialog-icon">
+            <img class="badge-dialog-image" id="badge-dialog-image" alt="">
+        </div>
+        <p class="badge-dialog-state" id="badge-dialog-state"></p>
+        <h2 id="badge-dialog-title"></h2>
+        <p class="badge-dialog-description" id="badge-dialog-description"></p>
+        <button id="badge-dialog-close" type="button">Close</button>
+    </dialog>
 
     <script type="module">
         import { getCurrentUser, getStatsPageData, signOut } from './auth.js';
@@ -250,13 +282,15 @@
                 document.getElementById('losses').textContent = account.stats.losses.toLocaleString();
                 document.getElementById('total-score').textContent = account.stats.total_score.toLocaleString();
 
-                const earnedCount = account.earnedBadgeIds.size;
-                document.getElementById('badge-count').textContent = `${earnedCount} / ${account.badges.length} earned`;
+                const badgeDialog = document.getElementById('badge-dialog');
+                document.getElementById('badge-dialog-close').addEventListener('click', () => badgeDialog.close());
 
                 for (const badge of account.badges) {
                     const isEarned = account.earnedBadgeIds.has(badge.id);
-                    const item = document.createElement('article');
-                    item.className = `badge-item${isEarned ? '' : ' is-locked'}`;
+                    const item = document.createElement('button');
+                    item.type = 'button';
+                    item.className = `badge-button${isEarned ? '' : ' is-locked'}`;
+                    item.setAttribute('aria-label', `${isEarned ? 'Earned' : 'Locked'} badge: ${badge.name}`);
 
                     const image = document.createElement('img');
                     image.className = 'badge-image';
@@ -264,16 +298,14 @@
                     image.alt = '';
                     image.loading = 'lazy';
 
-                    const details = document.createElement('div');
-                    const name = document.createElement('p');
-                    name.className = 'badge-name';
-                    name.textContent = badge.name;
-                    const description = document.createElement('p');
-                    description.className = 'badge-description';
-                    description.textContent = isEarned ? badge.description : 'Locked';
-
-                    details.append(name, description);
-                    item.append(image, details);
+                    item.append(image);
+                    item.addEventListener('click', () => {
+                        document.getElementById('badge-dialog-image').src = badge.image_path;
+                        document.getElementById('badge-dialog-state').textContent = isEarned ? 'Earned' : 'Not earned yet';
+                        document.getElementById('badge-dialog-title').textContent = badge.name;
+                        document.getElementById('badge-dialog-description').textContent = badge.description;
+                        badgeDialog.showModal();
+                    });
                     document.getElementById('badge-grid').append(item);
                 }
             }
