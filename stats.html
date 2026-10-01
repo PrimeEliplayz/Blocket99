@@ -230,9 +230,14 @@
             .badge-grid { grid-template-columns: repeat(4, 36px); gap: 4px; }
             .badge-button { width: 36px; height: 36px; }
         }
+
+        body[data-page="stats"] > header,
+        body[data-page="stats"] > main,
+        body[data-page="stats"] > dialog { display: none; }
     </style>
+    <link rel="stylesheet" href="app.css">
 </head>
-<body>
+<body data-page="stats">
     <header>
         <a class="brand" href="index.html">Blocket</a>
         <nav class="header-actions" aria-label="Main navigation">
@@ -354,5 +359,6 @@
             window.location.replace('index.html');
         });
     </script>
+    <script type="module" src="app.js"></script>
 </body>
 </html>

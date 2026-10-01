@@ -5,7 +5,7 @@ const SUPABASE_URL = 'https://kralnytkfdiodqzchfzv.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtyYWxueXRrZmRpb2RxemNoZnp2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTA4NjY2NDYsImV4cCI6MjEwNjQ0MjY0Nn0.Sgd6jWlCWA7feYX7kSe7e9STmYfjQoYOzF6qov5CgOQ';
 const isConfigured = !SUPABASE_URL.includes('YOUR_PROJECT_ID')
     && !SUPABASE_ANON_KEY.includes('YOUR_SUPABASE_ANON_KEY');
-const supabase = isConfigured ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
+export const supabase = isConfigured ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
 
 function showConfigurationError(status) {
     status.textContent = 'Add your Supabase project URL and anon key in auth.js to enable authentication.';
