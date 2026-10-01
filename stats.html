@@ -163,21 +163,48 @@
         .stats-grid {
             display: grid;
             grid-template-columns: repeat(3, minmax(0, 1fr));
-            border: 1px solid var(--line);
-            border-radius: 8px;
-            overflow: hidden;
+            gap: 12px;
         }
 
         .stat {
+            position: relative;
+            display: grid;
+            grid-template-columns: 48px minmax(0, 1fr) 48px;
+            align-items: center;
             min-width: 0;
-            padding: 22px;
-            background: var(--panel);
+            min-height: 100px;
+            padding: 12px;
+            border-radius: 8px;
+            background: #414141;
         }
 
-        .stat + .stat { border-left: 1px solid var(--line); }
-        .stat-label { margin: 0 0 14px; color: var(--muted); font-size: 14px; }
-        .stat-value { margin: 0; overflow-wrap: anywhere; font-size: 20px; font-weight: 700; }
-        #account-id { font-size: 14px; }
+        .stat-icon {
+            grid-column: 1;
+            grid-row: 1 / span 2;
+            width: 48px;
+            height: 48px;
+            object-fit: contain;
+        }
+
+        .stat-label {
+            grid-column: 2;
+            margin: 0 0 4px;
+            color: var(--text);
+            font-size: 14px;
+            text-align: center;
+        }
+
+        .stat-value {
+            grid-column: 2;
+            margin: 0;
+            overflow-wrap: anywhere;
+            color: white;
+            font-size: 24px;
+            font-weight: 800;
+            text-align: center;
+        }
+
+        .stat-spacer { grid-column: 3; grid-row: 1 / span 2; }
 
         .message {
             margin-top: 18px;
@@ -191,7 +218,6 @@
             .header-actions { gap: 10px; }
             main { margin-top: 36px; }
             .stats-grid { grid-template-columns: 1fr; }
-            .stat + .stat { border-left: 0; border-top: 1px solid var(--line); }
             .profile-heading { gap: 10px; }
             .profile-avatar { width: 70px; height: 70px; flex-basis: 70px; }
             .badge-grid { grid-template-columns: repeat(5, 44px); gap: 4px; }
@@ -231,20 +257,22 @@
 
         <section class="stats-grid" aria-label="Account statistics">
             <article class="stat">
-                <p class="stat-label">Games played</p>
-                <p class="stat-value" id="games-played">Loading...</p>
+                <img class="stat-icon" src="assets/badges/tokenIcon.webp" alt="">
+                <div class="stat-label">Tokens</div>
+                <p class="stat-value" id="tokens">Loading...</p>
+                <span class="stat-spacer" aria-hidden="true"></span>
             </article>
             <article class="stat">
-                <p class="stat-label">Wins</p>
-                <p class="stat-value" id="wins">Loading...</p>
+                <img class="stat-icon" src="assets/badges/unlockIcon.webp" alt="">
+                <div class="stat-label">Blooks Unlocked</div>
+                <p class="stat-value" id="blooks-unlocked">Loading...</p>
+                <span class="stat-spacer" aria-hidden="true"></span>
             </article>
             <article class="stat">
-                <p class="stat-label">Losses</p>
-                <p class="stat-value" id="losses">Loading...</p>
-            </article>
-            <article class="stat">
-                <p class="stat-label">Total score</p>
-                <p class="stat-value" id="total-score">Loading...</p>
+                <img class="stat-icon" src="assets/badges/openedIcon.webp" alt="">
+                <div class="stat-label">Packs Opened</div>
+                <p class="stat-value" id="packs-opened">Loading...</p>
+                <span class="stat-spacer" aria-hidden="true"></span>
             </article>
         </section>
         <p class="message" id="stats-message" role="status" aria-live="polite"></p>
@@ -277,10 +305,9 @@
             } else {
                 document.getElementById('profile-username').textContent = account.profile.username;
                 document.getElementById('profile-avatar').src = account.profile.avatar_path;
-                document.getElementById('games-played').textContent = account.stats.games_played.toLocaleString();
-                document.getElementById('wins').textContent = account.stats.wins.toLocaleString();
-                document.getElementById('losses').textContent = account.stats.losses.toLocaleString();
-                document.getElementById('total-score').textContent = account.stats.total_score.toLocaleString();
+                document.getElementById('tokens').textContent = account.stats.tokens.toLocaleString();
+                document.getElementById('blooks-unlocked').textContent = `${account.stats.blooks_unlocked.toLocaleString()} / ${account.stats.total_blooks.toLocaleString()}`;
+                document.getElementById('packs-opened').textContent = account.stats.packs_opened.toLocaleString();
 
                 const badgeDialog = document.getElementById('badge-dialog');
                 document.getElementById('badge-dialog-close').addEventListener('click', () => badgeDialog.close());

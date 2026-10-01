@@ -87,7 +87,7 @@ export async function getStatsPageData(userId) {
 
     const [profileResult, statsResult, badgesResult, earnedBadgesResult] = await Promise.all([
         supabase.from('profiles').select('username, avatar_path, created_at').eq('id', userId).single(),
-        supabase.from('player_stats').select('games_played, wins, losses, total_score').eq('user_id', userId).single(),
+        supabase.from('player_stats').select('packs_opened, blooks_unlocked, total_blooks, tokens').eq('user_id', userId).single(),
         supabase.from('badges').select('id, name, description, image_path').order('name'),
         supabase.from('user_badges').select('badge_id').eq('user_id', userId)
     ]);

@@ -14,12 +14,18 @@ alter table public.profiles
 
 create table if not exists public.player_stats (
     user_id uuid primary key references public.profiles (id) on delete cascade,
-    games_played integer not null default 0 check (games_played >= 0),
-    wins integer not null default 0 check (wins >= 0),
-    losses integer not null default 0 check (losses >= 0),
-    total_score bigint not null default 0 check (total_score >= 0),
+    packs_opened bigint not null default 0 check (packs_opened >= 0),
+    blooks_unlocked integer not null default 0 check (blooks_unlocked >= 0),
+    total_blooks integer not null default 917 check (total_blooks > 0),
+    tokens bigint not null default 0 check (tokens >= 0),
     updated_at timestamptz not null default now()
 );
+
+alter table public.player_stats
+    add column if not exists packs_opened bigint not null default 0 check (packs_opened >= 0),
+    add column if not exists blooks_unlocked integer not null default 0 check (blooks_unlocked >= 0),
+    add column if not exists total_blooks integer not null default 917 check (total_blooks > 0),
+    add column if not exists tokens bigint not null default 0 check (tokens >= 0);
 
 create table if not exists public.badges (
     id text primary key,
