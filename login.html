@@ -1,45 +1,97 @@
 <!DOCTYPE html>
-<html>
-<body>
-    <title>Login</title>
-
-    <h1 class="text">Blocket login</h1>
-
-<style>
-    body {
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Blocket Login</title>
+    <style>
+        body {
             margin: 0;
+            min-height: 100vh;
+            display: grid;
+            place-items: center;
             background-color: black;
             font-family: Arial, sans-serif;
         }
 
-        .text {
+        .login-box {
+            box-sizing: border-box;
+            width: min(410px, calc(100% - 32px));
+            padding: 30px;
+            background-color: #3b2b63;
+            border-radius: 15px;
+            text-align: center;
+        }
+
+        h1 {
             color: blueviolet;
-            margin-left: 700px;
+            margin: 0 0 22px;
         }
 
         .text-box {
-    width: 90%;
-    padding: 12px;
-    margin: 8px 0;
-    border: none;
-    border-radius: 8px;
-    background-color: purple;
-}
+            box-sizing: border-box;
+            width: 100%;
+            padding: 12px;
+            margin: 8px 0;
+            border: none;
+            border-radius: 8px;
+            background-color: white;
+            font-size: 16px;
+        }
 
-.login-button {
-    background-color: aquamarine;
-}
-</style>
+        .login-button {
+            width: 100%;
+            padding: 14px;
+            margin-top: 12px;
+            border: none;
+            border-radius: 10px;
+            background-color: blueviolet;
+            color: white;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+        }
 
-<div class="login-box">
+        .login-button:hover {
+            background-color: #9147e8;
+        }
 
-    <input class="text-box" type="text" placeholder="Username">
+        .switch-link {
+            display: inline-block;
+            margin-top: 18px;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <main class="login-box">
+        <h1 id="form-title">Blocket Login</h1>
+        <form id="auth-form">
+            <input class="text-box" id="username-field" type="text" name="username" placeholder="Username" autocomplete="username" hidden>
+            <input class="text-box" id="email-field" type="email" name="email" placeholder="Email" autocomplete="email" required>
+            <input class="text-box" id="password-field" type="password" name="password" placeholder="Password" autocomplete="current-password" required>
+            <button class="login-button" id="submit-button" type="submit">Login</button>
+        </form>
+        <p id="auth-status" role="status" aria-live="polite"></p>
+        <a class="switch-link" id="switch-link" href="index.html">Back to home</a>
+    </main>
+    <script>
+        const isSignup = window.location.hash === '#signup';
+        const emailField = document.getElementById('email-field');
+        const passwordField = document.getElementById('password-field');
 
-    <input class="text-box" type="password" placeholder="Password">
+        if (isSignup) {
+            document.title = 'Blocket Sign Up';
+            document.getElementById('form-title').textContent = 'Create an account';
+            document.getElementById('submit-button').textContent = 'Sign Up';
+            document.getElementById('switch-link').textContent = 'Already have an account? Log in';
+            document.getElementById('switch-link').href = 'login.html';
+        }
+    </script>
+    <script type="module">
+        import { setupAuthForm } from './auth.js';
 
-    <button class="login-button">Login</button>
-
-</div>
-
+        setupAuthForm(document.getElementById('auth-form'));
+    </script>
 </body>
 </html>
