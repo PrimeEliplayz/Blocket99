@@ -11,22 +11,25 @@
             font-family: Arial, sans-serif;
         }
 
-        .title {
-            text-align: center;
-            margin-top: 40px;
-            font-size: 40px;
-            color: blueviolet;
+        .logo {
+            display: block;
+            width: 420px;
+            max-width: 80%;
+            height: auto;
+            margin: 35px auto 0;
         }
 
         .description {
             text-align: center;
             color: blueviolet;
+            font-size: 18px;
+            margin-top: 5px;
         }
 
         .login-box {
             width: 350px;
             padding: 30px;
-            margin: 60px auto;
+            margin: 45px auto;
             background-color: #3b2b63;
             border-radius: 15px;
             text-align: center;
@@ -53,21 +56,39 @@
             background-color: white;
             color: #3b2b63;
         }
+
+        .login-button:hover {
+            background-color: #9147e8;
+        }
+
+        .signup-button:hover {
+            background-color: #eeeeee;
+        }
     </style>
 </head>
 
 <body>
 
-    <h1 class="title">Blocket</h1>
+    <img
+        class="logo"
+        src="assets/blocket-logo.png"
+        alt="Blocket"
+    >
 
     <p class="description">A BPS</p>
 
     <div class="login-box">
-        <button class="login-button" onclick="location.href='login.html'">
+        <button
+            class="login-button"
+            onclick="location.href='login.html'"
+        >
             Login
         </button>
 
-        <button class="signup-button" onclick="location.href='signup.html'">
+        <button
+            class="signup-button"
+            onclick="location.href='signup.html'"
+        >
             Sign Up
         </button>
     </div>
