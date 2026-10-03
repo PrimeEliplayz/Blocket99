@@ -4,8 +4,16 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 const SUPABASE_URL = 'https://kralnytkfdiodqzchfzv.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtyYWxueXRrZmRpb2RxemNoZnp2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTA4NjY2NDYsImV4cCI6MjEwNjQ0MjY0Nn0.Sgd6jWlCWA7feYX7kSe7e9STmYfjQoYOzF6qov5CgOQ';
 const isConfigured = !SUPABASE_URL.includes('YOUR_PROJECT_ID')
-    && !SUPABASE_ANON_KEY.includes('YOUR_SUPABASE_ANON_KEY');
+    && !SUPABASE_URL.includes('your-project-id')
+    && !SUPABASE_ANON_KEY.includes('YOUR_SUPABASE_ANON_KEY')
+    && !SUPABASE_ANON_KEY.includes('******');
 export const supabase = isConfigured ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
+
+const LOCAL_PREVIEW_USER = {
+    id: 'local-preview-user',
+    email: 'preview@local.dev',
+    user_metadata: { username: 'preview-user' }
+};
 
 function showConfigurationError(status) {
     status.textContent = 'Add your Supabase project URL and anon key in auth.js to enable authentication.';
@@ -76,14 +84,23 @@ export function setupAuthForm(form) {
 }
 
 export async function getCurrentUser() {
-    if (!supabase) return { user: null, error: new Error('Supabase is not configured.') };
+    if (!supabase) {
+        return { user: LOCAL_PREVIEW_USER, error: null };
+    }
 
     const { data, error } = await supabase.auth.getUser();
     return { user: data.user, error };
 }
 
 export async function getStatsPageData(userId) {
-    if (!supabase) return { error: new Error('Supabase is not configured.') };
+    if (!supabase) {
+        return {
+            profile: { username: 'preview-user', avatar_path: 'assets/badges/Gold%20Doubloon.webp', created_at: new Date().toISOString() },
+            stats: { packs_opened: 0, blooks_unlocked: 0, total_blooks: 917, tokens: 0 },
+            badges: [],
+            earnedBadgeIds: new Set()
+        };
+    }
 
     const [profileResult, statsResult, badgesResult, earnedBadgesResult] = await Promise.all([
         supabase.from('profiles').select('username, avatar_path, created_at').eq('id', userId).single(),
@@ -104,7 +121,7 @@ export async function getStatsPageData(userId) {
 }
 
 export async function signOut() {
-    if (!supabase) return { error: new Error('Supabase is not configured.') };
+    if (!supabase) return { error: null };
 
     const { error } = await supabase.auth.signOut();
     return { error };

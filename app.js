@@ -1,7 +1,7 @@
 import { supabase, getCurrentUser, getStatsPageData, signOut } from './auth.js';
 
 const page = document.body.dataset.page;
-const activePage = page === 'player' ? 'stats' : page === 'clan-detail' ? 'clans' : page;
+const activePage = page === 'player' ? 'stats' : page === 'clan-detail' ? 'clans' : page === 'store' ? 'market' : page;
 const app = document.createElement('div');
 app.className = 'app-shell';
 document.body.append(app);
@@ -28,6 +28,7 @@ const titles = {
     clans: ['Clans', 'Find your crew or start one.'],
     'clan-detail': ['Clan', 'Clan details and members.'],
     market: ['Market', 'Open packs and browse player listings.'],
+    store: ['Store', 'Browse Blocket upgrades and purchases.'],
     blooks: ['Blooks', 'Explore the blook catalog.'],
     inventory: ['Inventory', 'Your collection, all in one place.'],
     bazaar: ['Bazaar', 'Put a blook up for sale.'],
@@ -39,7 +40,7 @@ const titles = {
 const icon = (path) => `<span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24">${path}</svg></span>`;
 const sidebar = document.createElement('aside');
 sidebar.className = 'sidebar';
-sidebar.innerHTML = `<a class="brand" href="stats.html" aria-label="Blocket home">BLOCKET</a><nav class="side-nav" aria-label="Main navigation">${navItems.map(([id, label, url, path]) => `<a class="nav-link" href="${url}" ${id === activePage ? 'aria-current="page"' : ''}>${icon(path)}<span>${label}</span></a>`).join('')}</nav><footer class="sidebar-footer"><div class="social-links"><a class="social-link" href="https://discord.com" aria-label="Discord">D</a><a class="social-link" href="https://www.youtube.com" aria-label="YouTube">▶</a><a class="social-link" href="https://x.com" aria-label="X">X</a></div><a class="store-link" href="market.html">$ Visit the Store</a><button class="sidebar-sign-out" id="sign-out" type="button">Sign out</button></footer>`;
+sidebar.innerHTML = `<a class="brand" href="stats.html" aria-label="Blocket home">BLOCKET</a><nav class="side-nav" aria-label="Main navigation">${navItems.map(([id, label, url, path]) => `<a class="nav-link" href="${url}" ${id === activePage ? 'aria-current="page"' : ''}>${icon(path)}<span>${label}</span></a>`).join('')}</nav><footer class="sidebar-footer"><div class="social-links"><a class="social-link" href="https://discord.com" aria-label="Discord">D</a><a class="social-link" href="https://www.youtube.com" aria-label="YouTube">▶</a><a class="social-link" href="https://x.com" aria-label="X">X</a></div><a class="store-link" href="store.html">$ Visit the Store</a><button class="sidebar-sign-out" id="sign-out" type="button">Sign out</button></footer>`;
 app.append(sidebar);
 
 const main = document.createElement('main');
@@ -58,10 +59,27 @@ badgeDialog.innerHTML = '<div class="badge-dialog-icon"><img class="badge-dialog
 app.append(badgeDialog);
 badgeDialog.querySelector('#badge-dialog-close').addEventListener('click', () => badgeDialog.close());
 
-const content = document.getElementById('page-content');
-const notice = document.getElementById('page-notice');
+const content = pageWrap.querySelector('#page-content') || document.getElementById('page-content');
+const notice = pageWrap.querySelector('#page-notice') || document.getElementById('page-notice');
+if (!content) {
+    const fallback = document.createElement('div');
+    fallback.id = 'page-content';
+    pageWrap.append(fallback);
+}
+if (!notice) {
+    const fallbackNotice = document.createElement('p');
+    fallbackNotice.id = 'page-notice';
+    fallbackNotice.className = 'notice';
+    fallbackNotice.setAttribute('role', 'status');
+    fallbackNotice.setAttribute('aria-live', 'polite');
+    pageWrap.append(fallbackNotice);
+}
+
+const contentNode = pageWrap.querySelector('#page-content');
+const noticeNode = pageWrap.querySelector('#page-notice');
 const esc = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
 const money = (value) => Number(value || 0).toLocaleString();
+const currency = (value) => Number(value || 0).toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const node = (tag, text, className = '') => {
     const element = document.createElement(tag);
     if (text !== undefined) element.textContent = text;
@@ -96,6 +114,22 @@ async function requireUser() {
 }
 
 async function renderStats(user) {
+    if (!supabase) {
+        const preview = node('section', undefined, 'stats-dashboard');
+        const grid = node('section', undefined, 'stat-grid');
+        [['Tokens', 'tokenIcon.webp', '0'], ['Blooks Unlocked', 'unlockIcon.webp', '0 / 917'], ['Packs Opened', 'openedIcon.webp', '0']].forEach(([label, iconName, value]) => {
+            const card = node('article', undefined, 'stat-card');
+            const image = node('img'); image.className = 'stat-icon'; image.src = `assets/badges/${iconName}`; image.alt = '';
+            const labelNode = node('p', label, 'stat-label');
+            const valueNode = node('p', value, 'stat-value');
+            card.append(image, labelNode, valueNode);
+            grid.append(card);
+        });
+        preview.append(grid);
+        content.replaceChildren(preview);
+        return;
+    }
+
     const result = await getStatsPageData(user.id);
     if (result.error) throw result.error;
     const { profile, stats, badges, earnedBadgeIds } = result;
@@ -498,43 +532,80 @@ function listingCard(listing, onBuy) {
     return card;
 }
 
-async function renderMarket() {
-    const pricing = [
+async function renderMarket(user) {
+    const shopPlans = [
         {
+            id: '1h_booster',
             name: '1H Booster',
             price: '$9.99',
+            amountUsd: 9.99,
             accent: 'shop-card--blue',
             tag: 'Boost all the chances of blocks by 2x more for EVERYONE! This boosts for 1 hour.',
             reward: '+20,000 tokens',
-            action: 'Buy Now',
             buttonClass: 'shop-button--blue',
             footer: 'By clicking "Buy Now", you agree to Blocket\'s Terms of Service, End User License Agreement, and Privacy Policy. This is a one-time charge, you will NOT be charged monthly.'
         },
         {
+            id: 'plus',
             name: 'Plus',
             price: '$14.99',
+            amountUsd: 14.99,
             accent: 'shop-card--mid',
             tag: 'Access To Bonners Exclusive Ornaments Exclusive Chat Colors More Bazaar Listings Access To Creating Clans Upload Files in Chat Use Block Emojis Discard Plus Role',
             reward: '+30,000 tokens',
-            action: 'Already Owned',
             buttonClass: 'shop-button--dark',
             footer: 'By clicking "Buy Now", you agree to Blocket\'s Terms of Service, End User License Agreement, and Privacy Policy. This is a one-time charge, you will NOT be charged monthly.'
         },
         {
+            id: '3h_booster',
             name: '3H Booster',
             price: '$14.99',
+            amountUsd: 14.99,
             accent: 'shop-card--gold',
             tag: 'Boost all the chances of blocks by 2x more for EVERYONE! This boosts for 3 hours.',
             reward: '+30,000 tokens',
-            action: 'Buy Now',
             buttonClass: 'shop-button--gold',
             footer: 'By clicking "Buy Now", you agree to Blocket\'s Terms of Service, End User License Agreement, and Privacy Policy. This is a one-time charge, you will NOT be charged monthly.'
         }
     ];
 
+    if (!supabase || !user) {
+        const shop = node('section', undefined, 'shop-shell');
+        shopPlans.forEach((plan) => {
+            const card = node('article', undefined, `shop-card ${plan.accent}`);
+            if (plan.name === 'Plus') {
+                const badge = node('div', 'Plus', 'shop-card-badge');
+                card.append(badge);
+            }
+            const price = node('div', plan.price, 'shop-price');
+            const title = node('h2', plan.name, 'shop-card-title');
+            const feature = node('p', plan.tag, 'shop-copy');
+            const token = node('div', plan.reward, 'shop-token');
+            const button = node('button', 'Buy Now', `shop-button ${plan.buttonClass}`); button.type = 'button';
+            const divider = node('div', undefined, 'shop-divider');
+            const note = node('p', plan.footer, 'shop-legal');
+            card.append(title, price, feature, token, button, divider, note);
+            shop.append(card);
+        });
+        const footerNote = node('p', 'You have spent $0.00 on Blocket.\nKeep playing to unlock the Big Spender badge!', 'shop-footer-note');
+        content.replaceChildren(shop, footerNote);
+        return;
+    }
+
+    const [{ data: stats, error: statsError }, { data: purchases, error: purchaseError }] = await Promise.all([
+        supabase.from('player_stats').select('total_spent_usd').eq('user_id', user.id).maybeSingle(),
+        supabase.from('shop_purchases').select('product_id').eq('user_id', user.id)
+    ]);
+    if (statsError) throw statsError;
+    if (purchaseError) throw purchaseError;
+
+    const totalSpent = Number(stats?.total_spent_usd ?? 0);
+    const ownedProductIds = new Set((purchases || []).map((purchase) => purchase.product_id));
+
     const shop = node('section', undefined, 'shop-shell');
-    pricing.forEach((plan) => {
+    shopPlans.forEach((plan) => {
         const card = node('article', undefined, `shop-card ${plan.accent}`);
+        const isOwned = ownedProductIds.has(plan.id);
         if (plan.name === 'Plus') {
             const badge = node('div', 'Plus', 'shop-card-badge');
             card.append(badge);
@@ -543,28 +614,28 @@ async function renderMarket() {
         const price = node('div', plan.price, 'shop-price');
         const feature = node('p', plan.tag, 'shop-copy');
         const token = node('div', plan.reward, 'shop-token');
-        const button = node('button', plan.action, `shop-button ${plan.buttonClass}`); button.type = 'button';
+        const button = node('button', isOwned ? 'Already Owned' : 'Buy Now', `shop-button ${isOwned ? 'shop-button--dark' : plan.buttonClass}`);
+        button.type = 'button';
+        button.disabled = isOwned;
+        button.addEventListener('click', async () => {
+            if (isOwned) return;
+            const { error } = await supabase.rpc('record_shop_purchase', {
+                p_product_id: plan.id,
+                p_product_name: plan.name,
+                p_amount_usd: plan.amountUsd
+            });
+            if (error) setNotice(error.message, 'error');
+            else { setNotice(`Purchased ${plan.name}.`, 'success'); await renderMarket(user); }
+        });
         const divider = node('div', undefined, 'shop-divider');
         const note = node('p', plan.footer, 'shop-legal');
         card.append(title, price, feature, token, button, divider, note);
         shop.append(card);
     });
 
-    const footerNote = node('p', 'You have spent $70 on Blocket.\nYou already have unlocked the Big Spender badge!', 'shop-footer-note');
+    const footerText = `${totalSpent >= 70 ? 'You already have unlocked the Big Spender badge!' : 'Keep playing to unlock the Big Spender badge!'}`;
+    const footerNote = node('p', `You have spent ${currency(totalSpent)} on Blocket.\n${footerText}`, 'shop-footer-note');
     content.replaceChildren(shop, footerNote);
-
-    const results = await supabase.from('market_listings').select('id, quantity, price_each, seller_id, profiles(username), blooks(name)').eq('status', 'active').order('created_at', { ascending: false }).limit(60);
-    if (results.error) throw results.error;
-    if (results.data.length) {
-        const grid = node('section', undefined, 'data-grid market-listings');
-        results.data.forEach((listing) => grid.append(listingCard(listing, async (item) => {
-            const { error } = await supabase.rpc('purchase_listing', { p_listing_id: item.id, p_quantity: 1 });
-            if (error) setNotice(error.message, 'error'); else { setNotice('Purchase complete.', 'success'); window.location.reload(); }
-        })));
-        const section = node('section', undefined, 'market-listings-wrap');
-        section.append(node('h2', 'Player listings', 'panel-title'), grid);
-        content.append(section);
-    }
 }
 
 async function renderBlooks() {
@@ -737,7 +808,7 @@ async function openPack(pack) {
 }
 
 async function renderMarketRoot(user) {
-    if (page === 'market') return renderPackOpening(user);
+    if (page === 'market' || page === 'store') return renderMarket(user);
     return renderBazaar(user);
 }
 
@@ -752,7 +823,7 @@ async function boot() {
         else if (page === 'chat') await renderChat(user);
         else if (page === 'clans') await renderClans(user);
         else if (page === 'clan-detail') await renderClanDetail(user);
-        else if (page === 'market') await renderMarketRoot(user);
+        else if (page === 'market' || page === 'store') await renderMarketRoot(user);
         else if (page === 'blooks') await renderBlooks();
         else if (page === 'inventory') await renderInventory();
         else if (page === 'bazaar') await renderBazaar(user);

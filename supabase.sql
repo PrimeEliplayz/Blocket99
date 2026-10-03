@@ -142,6 +142,19 @@ create table if not exists public.market_listings (
     created_at timestamptz not null default now()
 );
 
+create table if not exists public.shop_purchases (
+    id bigint generated always as identity primary key,
+    user_id uuid not null references public.profiles (id) on delete cascade,
+    product_id text not null,
+    product_name text not null,
+    amount_usd numeric(10,2) not null check (amount_usd >= 0),
+    purchased_at timestamptz not null default now(),
+    unique (user_id, product_id)
+);
+
+alter table public.player_stats
+    add column if not exists total_spent_usd numeric(10,2) not null default 0 check (total_spent_usd >= 0);
+
 create table if not exists public.news_posts (
     id bigint generated always as identity primary key,
     title text not null,
@@ -267,10 +280,12 @@ begin
     end if;
 
     insert into public.profiles (id, username)
-    values (new.id, safe_username);
+    values (new.id, safe_username)
+    on conflict (id) do nothing;
 
-    insert into public.player_stats (user_id, tokens)
-    values (new.id, 100);
+    insert into public.player_stats (user_id, tokens, total_spent_usd)
+    values (new.id, 100, 0)
+    on conflict (user_id) do nothing;
 
     return new;
 end;
@@ -280,6 +295,51 @@ drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created
 after insert on auth.users
 for each row execute function public.handle_new_user();
+
+create or replace function public.record_shop_purchase(p_product_id text, p_product_name text, p_amount_usd numeric)
+returns numeric
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+    current_user_id uuid := auth.uid();
+    updated_total numeric(10,2);
+    row_count integer;
+begin
+    if current_user_id is null then
+        raise exception 'Authentication required.';
+    end if;
+
+    if p_product_id is null or p_product_name is null then
+        raise exception 'Purchase details are required.';
+    end if;
+
+    if p_amount_usd is null or p_amount_usd < 0 then
+        raise exception 'Purchase amount must be zero or greater.';
+    end if;
+
+    insert into public.shop_purchases (user_id, product_id, product_name, amount_usd)
+    values (current_user_id, p_product_id, p_product_name, p_amount_usd)
+    on conflict (user_id, product_id) do nothing;
+
+    get diagnostics row_count = row_count;
+    if row_count > 0 then
+        update public.player_stats
+        set total_spent_usd = coalesce(total_spent_usd, 0) + p_amount_usd
+        where user_id = current_user_id;
+    end if;
+
+    select total_spent_usd into updated_total
+    from public.player_stats
+    where user_id = current_user_id;
+
+    return coalesce(updated_total, 0);
+end;
+$$;
+
+revoke all on function public.record_shop_purchase(text, text, numeric) from public;
+grant execute on function public.record_shop_purchase(text, text, numeric) to authenticated;
 
 alter table public.profiles enable row level security;
 alter table public.player_stats enable row level security;
@@ -294,6 +354,7 @@ alter table public.chat_messages enable row level security;
 alter table public.clans enable row level security;
 alter table public.clan_members enable row level security;
 alter table public.market_listings enable row level security;
+alter table public.shop_purchases enable row level security;
 alter table public.news_posts enable row level security;
 alter table public.friendships enable row level security;
 alter table public.token_claims enable row level security;
@@ -395,6 +456,16 @@ drop policy if exists "Users can read their own token claims" on public.token_cl
 create policy "Users can read their own token claims"
 on public.token_claims for select to authenticated
 using ((select auth.uid()) = user_id);
+
+drop policy if exists "Users can read their own shop purchases" on public.shop_purchases;
+create policy "Users can read their own shop purchases"
+on public.shop_purchases for select to authenticated
+using ((select auth.uid()) = user_id);
+
+drop policy if exists "Users can insert their own purchases" on public.shop_purchases;
+create policy "Users can insert their own purchases"
+on public.shop_purchases for insert to authenticated
+with check ((select auth.uid()) = user_id);
 
 drop policy if exists "Invitees and clan owners can read invitations" on public.clan_invites;
 create policy "Invitees and clan owners can read invitations"

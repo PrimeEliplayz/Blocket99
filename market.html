@@ -1,2 +1,227 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Blocket Market</title><link rel="stylesheet" href="app.css"></head><body data-page="market"><script type="module" src="app.js"></script></body></html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Blocket Shop</title>
+  <style>
+    :root {
+      --bg-1: #15171a;
+      --bg-2: #252a2f;
+      --card-blue-1: #2d8adf;
+      --card-blue-2: #1d75d1;
+      --card-mid-1: #00a8d9;
+      --card-mid-2: #0d7ccd;
+      --card-gold-1: #f7c33b;
+      --card-gold-2: #efaf12;
+      --text: #f3f7ff;
+      --muted: rgba(255,255,255,.85);
+      --line: rgba(255,255,255,.34);
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      margin: 0;
+      min-height: 100%;
+      background:
+        linear-gradient(135deg, rgba(255,255,255,0.06) 25%, transparent 25%) 0 0 / 36px 36px,
+        linear-gradient(225deg, rgba(255,255,255,0.06) 25%, transparent 25%) 0 0 / 36px 36px,
+        linear-gradient(315deg, rgba(255,255,255,0.04) 25%, transparent 25%) 0 0 / 36px 36px,
+        linear-gradient(45deg, rgba(255,255,255,0.04) 25%, transparent 25%) 0 0 / 36px 36px,
+        var(--bg-1);
+      color: var(--text);
+      font-family: 'Arial', sans-serif;
+    }
+
+    body {
+      display: grid;
+      place-items: center;
+      min-height: 100vh;
+      padding: 32px 16px 48px;
+    }
+
+    .shop-shell {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(220px, 1fr));
+      gap: 28px;
+      width: min(1070px, 100%);
+      align-items: stretch;
+    }
+
+    .shop-card {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-start;
+      min-height: 520px;
+      padding: 18px 18px 16px;
+      border-radius: 18px 18px 12px 12px;
+      box-shadow: 0 18px 28px rgba(0,0,0,.28);
+      overflow: hidden;
+      color: var(--text);
+    }
+
+    .shop-card--blue {
+      background: linear-gradient(180deg, var(--card-blue-1), var(--card-blue-2));
+    }
+
+    .shop-card--mid {
+      background: linear-gradient(180deg, var(--card-mid-1), var(--card-mid-2));
+    }
+
+    .shop-card--gold {
+      background: linear-gradient(180deg, var(--card-gold-1), var(--card-gold-2));
+    }
+
+    .shop-card-badge {
+      width: calc(100% + 12px);
+      margin: -18px -6px 8px;
+      min-height: 70px;
+      display: grid;
+      place-items: center;
+      background: linear-gradient(90deg, #199adf, #2d7fe9);
+      border-radius: 14px 14px 0 0;
+      font-size: clamp(2rem, 2vw, 2.5rem);
+      font-weight: 700;
+      letter-spacing: -0.04em;
+      box-shadow: inset 0 -4px 0 rgba(0,0,0,.08);
+    }
+
+    .shop-card-title {
+      margin: 0 0 10px;
+      font-size: clamp(2.1rem, 2vw, 3rem);
+      line-height: 1;
+      text-align: center;
+      font-weight: 700;
+      text-shadow: 0 2px 0 rgba(0,0,0,.18);
+    }
+
+    .shop-price {
+      margin: 0 0 12px;
+      font-size: clamp(3.2rem, 3.7vw, 4.5rem);
+      font-weight: 800;
+      line-height: .95;
+      letter-spacing: -0.06em;
+      text-align: center;
+      text-shadow: 0 3px 0 rgba(0,0,0,.12);
+    }
+
+    .shop-copy {
+      margin: 0 0 14px;
+      color: var(--muted);
+      font-size: 1.05rem;
+      line-height: 1.5;
+      text-align: center;
+    }
+
+    .shop-token {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      margin: 0 auto 14px;
+      font-size: clamp(1.1rem, 1.7vw, 1.9rem);
+      font-weight: 700;
+      text-align: center;
+    }
+
+    .shop-token::before {
+      content: '◈';
+      font-size: 1.15em;
+    }
+
+    .shop-button {
+      width: 100%;
+      min-height: 52px;
+      margin-top: auto;
+      border: 2px solid rgba(255,255,255,.28);
+      border-radius: 12px;
+      background: rgba(255,255,255,.12);
+      color: white;
+      font-size: 1.15rem;
+      font-weight: 700;
+      cursor: pointer;
+      box-shadow: inset 0 -4px 0 rgba(0,0,0,.10);
+    }
+
+    .shop-button--dark {
+      background: rgba(16, 85, 149, 0.32);
+    }
+
+    .shop-divider {
+      width: 100%;
+      height: 1px;
+      margin: 18px 0 12px;
+      background: rgba(255,255,255,.42);
+    }
+
+    .shop-legal {
+      margin: 0;
+      color: rgba(255,255,255,.9);
+      font-size: 0.82rem;
+      line-height: 1.35;
+      text-align: center;
+    }
+
+    .shop-footer-note {
+      margin: 28px auto 0;
+      color: white;
+      font-size: clamp(1.5rem, 2vw, 2.6rem);
+      font-weight: 700;
+      line-height: 1.25;
+      text-align: center;
+      white-space: pre-line;
+    }
+
+    @media (max-width: 840px) {
+      .shop-shell {
+        grid-template-columns: 1fr;
+        width: min(420px, 100%);
+      }
+
+      .shop-card {
+        min-height: 440px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="shop-shell" aria-label="Blocket shop">
+    <article class="shop-card shop-card--blue">
+      <div class="shop-card-title">1H Booster</div>
+      <div class="shop-price">$9.99</div>
+      <p class="shop-copy">Boost all the chances of blocks by 2x more for EVERYONE! This boosts for 1 hour.</p>
+      <div class="shop-token">+20,000 tokens</div>
+      <button class="shop-button" type="button">Buy Now</button>
+      <div class="shop-divider"></div>
+      <p class="shop-legal">By clicking "Buy Now", you agree to Blocket's Terms of Service, End User License Agreement, and Privacy Policy. This is a one-time charge, you will NOT be charged monthly.</p>
+    </article>
+
+    <article class="shop-card shop-card--mid">
+      <div class="shop-card-badge">Plus</div>
+      <div class="shop-card-title">Plus</div>
+      <div class="shop-price">$14.99</div>
+      <p class="shop-copy">Access To Bonners Exclusive Ornaments Exclusive Chat Colors More Bazaar Listings Access To Creating Clans Upload Files in Chat Use Block Emojis Discard Plus Role</p>
+      <div class="shop-token">+30,000 tokens</div>
+      <button class="shop-button" type="button">Buy Now</button>
+      <div class="shop-divider"></div>
+      <p class="shop-legal">By clicking "Buy Now", you agree to Blocket's Terms of Service, End User License Agreement, and Privacy Policy. This is a one-time charge, you will NOT be charged monthly.</p>
+    </article>
+
+    <article class="shop-card shop-card--gold">
+      <div class="shop-card-title">3H Booster</div>
+      <div class="shop-price">$14.99</div>
+      <p class="shop-copy">Boost all the chances of blocks by 2x more for EVERYONE! This boosts for 3 hours.</p>
+      <div class="shop-token">+30,000 tokens</div>
+      <button class="shop-button" type="button">Buy Now</button>
+      <div class="shop-divider"></div>
+      <p class="shop-legal">By clicking "Buy Now", you agree to Blocket's Terms of Service, End User License Agreement, and Privacy Policy. This is a one-time charge, you will NOT be charged monthly.</p>
+    </article>
+  </main>
+
+  <p class="shop-footer-note">You have spent $0.00 on Blocket.
+Keep playing to unlock the Big Spender badge!</p>
+</body>
+</html>
+
