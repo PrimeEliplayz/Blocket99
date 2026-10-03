@@ -36,7 +36,7 @@ const titles = {
 const icon = (path) => `<span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24">${path}</svg></span>`;
 const sidebar = document.createElement('aside');
 sidebar.className = 'sidebar';
-sidebar.innerHTML = `<a class="brand" href="stats.html" aria-label="Blocket home">BLOCKET</a><nav class="side-nav" aria-label="Main navigation">${navItems.map(([id, label, url, path]) => `<a class="nav-link" href="${url}" ${id === page ? 'aria-current="page"' : ''}>${icon(path)}<span>${label}</span></a>`).join('')}</nav><footer class="sidebar-footer"><div class="social-links"><a class="social-link" href="https://discord.com" aria-label="Discord">D</a><a class="social-link" href="https://www.youtube.com" aria-label="YouTube">▶</a><a class="social-link" href="https://x.com" aria-label="X">X</a></div><a class="store-link" href="market.html">$ Visit the Store</a></footer>`;
+sidebar.innerHTML = `<a class="brand" href="stats.html" aria-label="Blocket home">BLOCKET</a><nav class="side-nav" aria-label="Main navigation">${navItems.map(([id, label, url, path]) => `<a class="nav-link" href="${url}" ${id === page ? 'aria-current="page"' : ''}>${icon(path)}<span>${label}</span></a>`).join('')}</nav><footer class="sidebar-footer"><div class="social-links"><a class="social-link" href="https://discord.com" aria-label="Discord">D</a><a class="social-link" href="https://www.youtube.com" aria-label="YouTube">▶</a><a class="social-link" href="https://x.com" aria-label="X">X</a></div><a class="store-link" href="market.html">$ Visit the Store</a><button class="sidebar-sign-out" id="sign-out" type="button">Sign out</button></footer>`;
 app.append(sidebar);
 
 const main = document.createElement('main');
@@ -51,9 +51,15 @@ app.append(main);
 
 const badgeDialog = document.createElement('dialog');
 badgeDialog.className = 'dialog';
-badgeDialog.innerHTML = '<img id="badge-dialog-image" width="76" height="76" alt=""><p class="page-kicker" id="badge-dialog-state"></p><h2 id="badge-dialog-title"></h2><p id="badge-dialog-description"></p><button class="button-secondary" id="badge-dialog-close" type="button">Close</button>';
+badgeDialog.innerHTML = '<div class="badge-dialog-icon"><img class="badge-dialog-image" id="badge-dialog-image" alt=""></div><p class="page-kicker" id="badge-dialog-state"></p><h2 id="badge-dialog-title"></h2><p id="badge-dialog-description"></p><button class="button-secondary" id="badge-dialog-close" type="button">Close</button>';
 app.append(badgeDialog);
 badgeDialog.querySelector('#badge-dialog-close').addEventListener('click', () => badgeDialog.close());
+
+const playerSearchDialog = document.createElement('dialog');
+playerSearchDialog.className = 'dialog player-search-dialog';
+playerSearchDialog.innerHTML = '<h2>Search Player</h2><form class="player-search-form" id="player-search-form"><label class="field"><span>Username</span><input name="username" minlength="3" maxlength="24" pattern="[A-Za-z0-9_]{3,24}" autocomplete="off" placeholder="Enter exact username" required></label><button class="button-primary" type="submit">Search</button></form><div class="player-search-results" id="player-search-results" aria-live="polite"></div><button class="button-secondary" id="player-search-close" type="button">Close</button>';
+app.append(playerSearchDialog);
+playerSearchDialog.querySelector('#player-search-close').addEventListener('click', () => playerSearchDialog.close());
 
 const content = document.getElementById('page-content');
 const notice = document.getElementById('page-notice');
@@ -76,6 +82,13 @@ const setNotice = (text, state = '') => {
 };
 const setContent = (markup) => { content.innerHTML = markup; };
 const empty = (text) => node('p', text, 'notice');
+const showBadgeDetails = (badge) => {
+    badgeDialog.querySelector('#badge-dialog-image').src = badge.image_path;
+    badgeDialog.querySelector('#badge-dialog-state').textContent = 'Earned';
+    badgeDialog.querySelector('#badge-dialog-title').textContent = badge.name;
+    badgeDialog.querySelector('#badge-dialog-description').textContent = badge.description;
+    badgeDialog.showModal();
+};
 
 async function requireUser() {
     const { user, error } = await getCurrentUser();
@@ -98,25 +111,19 @@ async function renderStats(user) {
     const meta = node('div', undefined, 'profile-meta');
     meta.append(node('p', profile.username, 'profile-name'));
     const badgeGrid = node('div', undefined, 'badge-grid');
-    badges.forEach((badge) => {
-        const earned = earnedBadgeIds.has(badge.id);
-        const button = node('button', undefined, `badge-button${earned ? '' : ' is-locked'}`);
+    badges.filter((badge) => earnedBadgeIds.has(badge.id)).forEach((badge) => {
+        const button = node('button', undefined, 'badge-button');
         button.type = 'button';
         button.title = `${badge.name}: ${badge.description}`;
-        button.setAttribute('aria-label', `${earned ? 'Earned' : 'Locked'} badge: ${badge.name}`);
+        button.setAttribute('aria-label', `Earned badge: ${badge.name}`);
         const image = node('img');
         image.src = badge.image_path;
         image.alt = '';
         button.append(image);
-        button.addEventListener('click', () => {
-            badgeDialog.querySelector('#badge-dialog-image').src = badge.image_path;
-            badgeDialog.querySelector('#badge-dialog-state').textContent = earned ? 'Earned' : 'Not earned yet';
-            badgeDialog.querySelector('#badge-dialog-title').textContent = badge.name;
-            badgeDialog.querySelector('#badge-dialog-description').textContent = badge.description;
-            badgeDialog.showModal();
-        });
+        button.addEventListener('click', () => showBadgeDetails(badge));
         badgeGrid.append(button);
     });
+    if (!earnedBadgeIds.size) badgeGrid.append(node('p', 'No badges earned yet.', 'notice'));
     meta.append(badgeGrid);
     profileRow.append(avatar, meta);
     shell.append(profileRow);
@@ -135,8 +142,77 @@ async function renderStats(user) {
         grid.append(card);
     });
     shell.append(grid);
+    const actions = node('div', undefined, 'stats-actions');
+    const searchButton = node('button', 'Search Player', 'button-primary');
+    searchButton.type = 'button';
+    searchButton.addEventListener('click', () => {
+        document.getElementById('player-search-results').replaceChildren();
+        playerSearchDialog.showModal();
+        playerSearchDialog.querySelector('[name="username"]').focus();
+    });
+    actions.append(searchButton);
+    shell.append(actions);
     content.replaceChildren(shell);
 }
+
+document.getElementById('player-search-form').addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const username = new FormData(form).get('username').toString().trim().toLowerCase();
+    const results = document.getElementById('player-search-results');
+    results.replaceChildren(node('p', 'Searching...', 'notice'));
+
+    const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select('id, username, avatar_path')
+        .ilike('username', username)
+        .maybeSingle();
+
+    if (profileError) {
+        results.replaceChildren(node('p', profileError.message, 'notice'));
+        return;
+    }
+    if (!profile) {
+        results.replaceChildren(node('p', 'No player found with that username.', 'notice'));
+        return;
+    }
+
+    const { data: earnedRows, error: badgesError } = await supabase
+        .from('user_badges')
+        .select('badges(id, name, description, image_path)')
+        .eq('user_id', profile.id);
+
+    if (badgesError) {
+        results.replaceChildren(node('p', badgesError.message, 'notice'));
+        return;
+    }
+
+    const player = node('article', undefined, 'public-player');
+    const heading = node('div', undefined, 'public-player-heading');
+    const avatar = node('img', undefined, 'public-player-avatar');
+    avatar.src = profile.avatar_path || 'assets/badges/Gold%20Doubloon.webp';
+    avatar.alt = '';
+    heading.append(avatar, node('h3', profile.username, 'public-player-name'));
+    player.append(heading);
+
+    const badgeGrid = node('div', undefined, 'badge-grid');
+    const earnedBadges = earnedRows.map((row) => row.badges).filter(Boolean);
+    if (!earnedBadges.length) badgeGrid.append(node('p', 'No badges earned yet.', 'notice'));
+    earnedBadges.forEach((badge) => {
+        const button = node('button', undefined, 'badge-button');
+        button.type = 'button';
+        button.setAttribute('aria-label', `Earned badge: ${badge.name}`);
+        button.title = badge.name;
+        const image = node('img');
+        image.src = badge.image_path;
+        image.alt = '';
+        button.append(image);
+        button.addEventListener('click', () => showBadgeDetails(badge));
+        badgeGrid.append(button);
+    });
+    player.append(badgeGrid);
+    results.replaceChildren(player);
+});
 
 async function renderLeaderboard() {
     const { data, error } = await supabase.from('leaderboard').select('username, avatar_path, tokens, blooks_unlocked, packs_opened').order('tokens', { ascending: false }).limit(50);
@@ -152,7 +228,7 @@ async function renderLeaderboard() {
     content.replaceChildren(table);
 }
 
-async function renderChat() {
+async function renderChat(user) {
     setContent('<section class="surface panel"><div class="message-list" id="messages" aria-live="polite"></div><form class="inline-form" id="chat-form"><label class="field"><span>Message</span><input name="body" maxlength="500" required autocomplete="off" placeholder="Say something..."></label><button class="button-primary" type="submit">Send</button></form></section>');
     const list = document.getElementById('messages');
     const load = async () => {
@@ -172,7 +248,7 @@ async function renderChat() {
         event.preventDefault();
         const body = new FormData(form).get('body').toString().trim();
         if (!body) return;
-        const { error } = await supabase.from('chat_messages').insert({ body, room: 'global' });
+        const { error } = await supabase.from('chat_messages').insert({ author_id: user.id, body, room: 'global' });
         if (error) { setNotice(error.message, 'error'); return; }
         form.reset(); await load();
     });
@@ -200,9 +276,10 @@ async function renderClans(user) {
     await load();
     document.getElementById('clan-form').addEventListener('submit', async (event) => {
         event.preventDefault();
-        const name = new FormData(event.currentTarget).get('name').toString().trim();
+        const form = event.currentTarget;
+        const name = new FormData(form).get('name').toString().trim();
         const { error } = await supabase.rpc('create_clan', { p_name: name });
-        if (error) setNotice(error.message, 'error'); else { setNotice('Clan created.', 'success'); event.currentTarget.reset(); await load(); }
+        if (error) setNotice(error.message, 'error'); else { setNotice('Clan created.', 'success'); form.reset(); await load(); }
     });
 }
 
@@ -243,7 +320,7 @@ async function renderBlooks() {
 }
 
 async function renderInventory() {
-    const { data, error } = await supabase.from('user_blooks').select('quantity, blooks(id, name, rarity, image_path, description)').order('blook_id');
+    const { data, error } = await supabase.from('user_blooks').select('quantity, blooks(id, name, rarity, image_path, description)').gt('quantity', 0).order('blook_id');
     if (error) throw error;
     const grid = node('section', undefined, 'data-grid');
     if (!data.length) grid.append(empty('Your inventory is empty. Open a pack to get your first blook.'));
@@ -262,12 +339,19 @@ async function renderBazaar(user) {
         supabase.from('market_listings').select('id, quantity, price_each, blooks(name)').eq('seller_id', user.id).eq('status', 'active').order('created_at', { ascending: false })
     ]);
     if (inventoryError || listingError) throw inventoryError || listingError;
-    setContent('<section class="surface panel"><form id="listing-form"><label class="field"><span>Blook</span><select name="blook_id" id="listing-blook" required></select></label><label class="field"><span>Quantity</span><input name="quantity" type="number" min="1" step="1" value="1" required></label><label class="field"><span>Price per blook (tokens)</span><input name="price_each" type="number" min="1" step="1" value="10" required></label><button class="button-primary" type="submit">List in Bazaar</button></form></section><h2 class="panel-title" style="margin-top:24px">Your active listings</h2><section class="data-grid" id="my-listings"></section>');
+    setContent('<section class="surface panel"><form id="listing-form"><label class="field"><span>Blook</span><select name="blook_id" id="listing-blook" required></select></label><label class="field"><span>Quantity</span><input name="quantity" id="listing-quantity" type="number" min="1" max="1" step="1" value="1" required></label><label class="field"><span>Price per blook (tokens)</span><input name="price_each" type="number" min="1" step="1" value="10" required></label><button class="button-primary" type="submit">List in Bazaar</button></form></section><h2 class="panel-title" style="margin-top:24px">Your active listings</h2><section class="data-grid" id="my-listings"></section>');
     const select = document.getElementById('listing-blook');
-    inventory.forEach(({ blook_id, quantity, blooks }) => { const option = node('option', `${blooks.name} · ${quantity} available`); option.value = blook_id; select.append(option); });
+    const quantityInput = document.getElementById('listing-quantity');
+    inventory.forEach(({ blook_id, quantity, blooks }, index) => {
+        const option = node('option', `${blooks.name} · ${quantity} available`);
+        option.value = blook_id;
+        option.dataset.quantity = quantity;
+        select.append(option);
+        if (index === 0) quantityInput.max = quantity;
+    });
+    select.addEventListener('change', () => { quantityInput.max = select.selectedOptions[0]?.dataset.quantity || 1; });
     if (!inventory.length) select.append(node('option', 'No blooks available to list'));
     const list = document.getElementById('my-listings');
-    if (!listings.length) list.append(empty('You have no active listings.'));
     if (!listings.length) list.append(empty('You have no active listings.'));
     listings.forEach((listing) => {
         const card = node('article', undefined, 'item-card');
@@ -296,12 +380,31 @@ async function renderBazaar(user) {
 }
 
 async function renderNews() {
-    const { data, error } = await supabase.from('news_posts').select('id, title, body, published_at').eq('is_published', true).order('published_at', { ascending: false }).limit(30);
+    setContent('<header class="news-topbar"><div class="news-heading"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M7 7h10M7 11h10M7 15h6"/></svg><h1>Blocket News</h1></div><button class="news-close" id="close-news" type="button" aria-label="Close news">×</button></header><section class="news-feed" id="news-feed" aria-label="News articles"></section>');
+    document.getElementById('close-news').addEventListener('click', () => window.location.assign('stats.html'));
+    const { data, error } = await supabase.from('news_posts').select('id, title, body, image_path, published_at').eq('is_published', true).order('published_at', { ascending: false }).limit(30);
     if (error) throw error;
-    const stack = node('section', undefined, 'data-grid');
-    if (!data.length) stack.append(empty('No news yet.'));
-    data.forEach((post) => { const article = node('article', undefined, 'item-card'); article.append(node('p', post.published_at ? new Date(post.published_at).toLocaleDateString() : '', 'page-kicker'), node('h3', post.title), node('p', post.body)); stack.append(article); });
-    content.replaceChildren(stack);
+    const feed = document.getElementById('news-feed');
+    if (!data.length) feed.append(node('p', 'No news yet.', 'news-empty'));
+    data.forEach((post) => {
+        const article = node('article', undefined, 'news-card');
+        article.append(node('h2', post.title));
+        if (post.image_path) {
+            const image = node('img');
+            image.className = 'news-card-image';
+            image.src = post.image_path;
+            image.alt = post.title;
+            image.loading = 'lazy';
+            article.append(image);
+        }
+        article.append(node('p', post.body, 'news-card-body'));
+        if (post.published_at) {
+            const date = node('p', new Date(post.published_at).toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'short', day: 'numeric' }), 'news-card-date');
+            date.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M7 3v4m10-4v4M3 10h18"/></svg>' + esc(date.textContent);
+            article.append(date);
+        }
+        feed.append(article);
+    });
 }
 
 async function renderCredits() {
@@ -315,14 +418,14 @@ async function renderCredits() {
 async function renderSettings(user) {
     const { data: profile, error } = await supabase.from('profiles').select('username, avatar_path').eq('id', user.id).single();
     if (error) throw error;
-    setContent(`<section class="surface panel"><form id="settings-form"><label class="field"><span>Email</span><input value="${esc(user.email)}" disabled></label><label class="field"><span>Username</span><input name="username" value="${esc(profile.username)}" minlength="3" maxlength="24" pattern="[a-zA-Z0-9_]+" required></label><button class="button-primary" type="submit">Save settings</button></form><button class="button-danger" id="delete-account" type="button" style="margin-top:18px">Sign out</button></section>`);
+    setContent(`<section class="surface panel"><form id="settings-form"><label class="field"><span>Email</span><input value="${esc(user.email)}" disabled></label><label class="field"><span>Username</span><input name="username" value="${esc(profile.username)}" minlength="3" maxlength="24" pattern="[a-zA-Z0-9_]+" required></label><button class="button-primary" type="submit">Save settings</button></form><button class="button-danger" id="settings-sign-out" type="button" style="margin-top:18px">Sign out</button></section>`);
     document.getElementById('settings-form').addEventListener('submit', async (event) => {
         event.preventDefault();
         const username = new FormData(event.currentTarget).get('username').toString().trim().toLowerCase();
         const { error: updateError } = await supabase.from('profiles').update({ username }).eq('id', user.id);
         if (updateError) setNotice(updateError.message, 'error'); else setNotice('Settings saved.', 'success');
     });
-    document.getElementById('delete-account').addEventListener('click', async () => {
+    document.getElementById('settings-sign-out').addEventListener('click', async () => {
         const { error: logoutError } = await signOut();
         if (logoutError) setNotice(logoutError.message, 'error'); else window.location.assign('index.html');
     });
@@ -383,7 +486,7 @@ async function boot() {
     try {
         if (page === 'stats') await renderStats(user);
         else if (page === 'leaderboard') await renderLeaderboard();
-        else if (page === 'chat') await renderChat();
+        else if (page === 'chat') await renderChat(user);
         else if (page === 'clans') await renderClans(user);
         else if (page === 'market') await renderMarketRoot(user);
         else if (page === 'blooks') await renderBlooks();

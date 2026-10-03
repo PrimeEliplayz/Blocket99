@@ -107,10 +107,13 @@ create table if not exists public.news_posts (
     id bigint generated always as identity primary key,
     title text not null,
     body text not null,
+    image_path text,
     is_published boolean not null default false,
     published_at timestamptz,
     created_at timestamptz not null default now()
 );
+
+alter table public.news_posts add column if not exists image_path text;
 
 insert into public.blooks (id, name, rarity, description, sort_order) values
     ('seel', 'Seel', 'Uncommon', 'A cool friend for your collection.', 1)
@@ -290,6 +293,10 @@ drop policy if exists "Users can read their own earned badges" on public.user_ba
 create policy "Users can read their own earned badges"
 on public.user_badges for select to authenticated
 using ((select auth.uid()) = user_id);
+
+drop policy if exists "Authenticated users can read public earned badges" on public.user_badges;
+create policy "Authenticated users can read public earned badges"
+on public.user_badges for select to authenticated using (true);
 
 drop policy if exists "Authenticated users can read blooks" on public.blooks;
 create policy "Authenticated users can read blooks"
@@ -623,6 +630,7 @@ grant select on public.blooks, public.packs, public.pack_blooks to authenticated
 grant select on public.user_blooks, public.pack_openings to authenticated;
 grant select on public.chat_messages to authenticated;
 grant insert, delete on public.chat_messages to authenticated;
+grant usage, select on sequence public.chat_messages_id_seq to authenticated;
 grant select on public.clans, public.clan_members to authenticated;
 grant select on public.market_listings to authenticated;
 grant select on public.news_posts to authenticated;
