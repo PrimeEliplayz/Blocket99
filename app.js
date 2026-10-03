@@ -1,6 +1,7 @@
 import { supabase, getCurrentUser, getStatsPageData, signOut } from './auth.js';
 
 const page = document.body.dataset.page;
+const activePage = page === 'player' ? 'stats' : page === 'clan-detail' ? 'clans' : page;
 const app = document.createElement('div');
 app.className = 'app-shell';
 document.body.append(app);
@@ -21,9 +22,11 @@ const navItems = [
 
 const titles = {
     stats: ['Stats', 'Your Blocket overview.'],
+    player: ['Player', 'Player profile.'],
     leaderboard: ['Leaderboard', 'See how players are stacking up.'],
     chat: ['Chat', 'Talk with the Blocket community.'],
     clans: ['Clans', 'Find your crew or start one.'],
+    'clan-detail': ['Clan', 'Clan details and members.'],
     market: ['Market', 'Open packs and browse player listings.'],
     blooks: ['Blooks', 'Explore the blook catalog.'],
     inventory: ['Inventory', 'Your collection, all in one place.'],
@@ -36,7 +39,7 @@ const titles = {
 const icon = (path) => `<span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24">${path}</svg></span>`;
 const sidebar = document.createElement('aside');
 sidebar.className = 'sidebar';
-sidebar.innerHTML = `<a class="brand" href="stats.html" aria-label="Blocket home">BLOCKET</a><nav class="side-nav" aria-label="Main navigation">${navItems.map(([id, label, url, path]) => `<a class="nav-link" href="${url}" ${id === page ? 'aria-current="page"' : ''}>${icon(path)}<span>${label}</span></a>`).join('')}</nav><footer class="sidebar-footer"><div class="social-links"><a class="social-link" href="https://discord.com" aria-label="Discord">D</a><a class="social-link" href="https://www.youtube.com" aria-label="YouTube">▶</a><a class="social-link" href="https://x.com" aria-label="X">X</a></div><a class="store-link" href="market.html">$ Visit the Store</a><button class="sidebar-sign-out" id="sign-out" type="button">Sign out</button></footer>`;
+sidebar.innerHTML = `<a class="brand" href="stats.html" aria-label="Blocket home">BLOCKET</a><nav class="side-nav" aria-label="Main navigation">${navItems.map(([id, label, url, path]) => `<a class="nav-link" href="${url}" ${id === activePage ? 'aria-current="page"' : ''}>${icon(path)}<span>${label}</span></a>`).join('')}</nav><footer class="sidebar-footer"><div class="social-links"><a class="social-link" href="https://discord.com" aria-label="Discord">D</a><a class="social-link" href="https://www.youtube.com" aria-label="YouTube">▶</a><a class="social-link" href="https://x.com" aria-label="X">X</a></div><a class="store-link" href="market.html">$ Visit the Store</a><button class="sidebar-sign-out" id="sign-out" type="button">Sign out</button></footer>`;
 app.append(sidebar);
 
 const main = document.createElement('main');
@@ -51,15 +54,9 @@ app.append(main);
 
 const badgeDialog = document.createElement('dialog');
 badgeDialog.className = 'dialog';
-badgeDialog.innerHTML = '<div class="badge-dialog-icon"><img class="badge-dialog-image" id="badge-dialog-image" alt=""></div><p class="page-kicker" id="badge-dialog-state"></p><h2 id="badge-dialog-title"></h2><p id="badge-dialog-description"></p><button class="button-secondary" id="badge-dialog-close" type="button">Close</button>';
+badgeDialog.innerHTML = '<div class="badge-dialog-icon"><img class="badge-dialog-image" id="badge-dialog-image" alt=""></div><h2 id="badge-dialog-title"></h2><p id="badge-dialog-description"></p><button class="button-secondary" id="badge-dialog-close" type="button">Close</button>';
 app.append(badgeDialog);
 badgeDialog.querySelector('#badge-dialog-close').addEventListener('click', () => badgeDialog.close());
-
-const playerSearchDialog = document.createElement('dialog');
-playerSearchDialog.className = 'dialog player-search-dialog';
-playerSearchDialog.innerHTML = '<h2>Search Player</h2><form class="player-search-form" id="player-search-form"><label class="field"><span>Username</span><input name="username" minlength="3" maxlength="24" pattern="[A-Za-z0-9_]{3,24}" autocomplete="off" placeholder="Enter exact username" required></label><button class="button-primary" type="submit">Search</button></form><div class="player-search-results" id="player-search-results" aria-live="polite"></div><button class="button-secondary" id="player-search-close" type="button">Close</button>';
-app.append(playerSearchDialog);
-playerSearchDialog.querySelector('#player-search-close').addEventListener('click', () => playerSearchDialog.close());
 
 const content = document.getElementById('page-content');
 const notice = document.getElementById('page-notice');
@@ -84,7 +81,6 @@ const setContent = (markup) => { content.innerHTML = markup; };
 const empty = (text) => node('p', text, 'notice');
 const showBadgeDetails = (badge) => {
     badgeDialog.querySelector('#badge-dialog-image').src = badge.image_path;
-    badgeDialog.querySelector('#badge-dialog-state').textContent = 'Earned';
     badgeDialog.querySelector('#badge-dialog-title').textContent = badge.name;
     badgeDialog.querySelector('#badge-dialog-description').textContent = badge.description;
     badgeDialog.showModal();
@@ -103,116 +99,200 @@ async function renderStats(user) {
     const result = await getStatsPageData(user.id);
     if (result.error) throw result.error;
     const { profile, stats, badges, earnedBadgeIds } = result;
-    const shell = node('section');
-    const profileRow = node('div', undefined, 'profile-row');
-    const avatar = node('img', undefined, 'profile-avatar');
-    avatar.src = profile.avatar_path || 'assets/badges/Gold%20Doubloon.webp';
-    avatar.alt = 'Gold Doubloon profile picture';
-    const meta = node('div', undefined, 'profile-meta');
-    meta.append(node('p', profile.username, 'profile-name'));
+    const [{ count: messagesSent, error: messagesError }, { data: relationships, error: friendsError }, { data: requests, error: requestsError }] = await Promise.all([
+        supabase.from('chat_messages').select('id', { count: 'exact', head: true }).eq('author_id', user.id),
+        supabase.from('friendships').select('requester_id, recipient_id').eq('status', 'accepted').or(`requester_id.eq.${user.id},recipient_id.eq.${user.id}`),
+        supabase.from('friendships').select('id, requester_id').eq('recipient_id', user.id).eq('status', 'pending')
+    ]);
+    if (messagesError || friendsError || requestsError) throw messagesError || friendsError || requestsError;
+
+    const otherIds = [...new Set([
+        ...relationships.map((row) => row.requester_id === user.id ? row.recipient_id : row.requester_id),
+        ...requests.map((row) => row.requester_id)
+    ])];
+    const { data: people, error: peopleError } = otherIds.length
+        ? await supabase.from('profiles').select('id, username, avatar_path').in('id', otherIds)
+        : { data: [], error: null };
+    if (peopleError) throw peopleError;
+    const peopleById = new Map(people.map((person) => [person.id, person]));
+
+    const shell = node('section', undefined, 'stats-dashboard');
+    const topbar = node('header', undefined, 'profile-topbar');
+    const topActions = node('nav', undefined, 'profile-top-actions');
+    const back = node('a', '↶', 'profile-icon-button'); back.href = 'index.html'; back.setAttribute('aria-label', 'Back to home');
+    const settings = node('a', '⚙', 'profile-icon-button'); settings.href = 'settings.html'; settings.setAttribute('aria-label', 'Settings');
+    const news = node('a', '▤', 'profile-icon-button'); news.href = 'news.html'; news.setAttribute('aria-label', 'News');
+    topActions.append(back, settings, news);
+    const account = node('a', undefined, 'profile-account'); account.href = 'settings.html';
+    const accountAvatar = node('img'); accountAvatar.src = profile.avatar_path || 'assets/badges/Gold%20Doubloon.webp'; accountAvatar.alt = '';
+    account.append(accountAvatar, node('span', profile.username));
+    topbar.append(topActions, node('h1', profile.username, 'profile-top-title'), account);
+    shell.append(topbar);
+
+    const profileHero = node('section', undefined, 'profile-hero');
+    const heroAvatar = node('img', undefined, 'profile-hero-avatar');
+    heroAvatar.src = profile.avatar_path || 'assets/badges/Gold%20Doubloon.webp'; heroAvatar.alt = `${profile.username} profile picture`;
+    const heroInfo = node('div', undefined, 'profile-hero-info');
+    heroInfo.append(node('h2', profile.username, 'profile-hero-name'));
     const badgeGrid = node('div', undefined, 'badge-grid');
     badges.filter((badge) => earnedBadgeIds.has(badge.id)).forEach((badge) => {
         const button = node('button', undefined, 'badge-button');
-        button.type = 'button';
-        button.title = `${badge.name}: ${badge.description}`;
-        button.setAttribute('aria-label', `Earned badge: ${badge.name}`);
-        const image = node('img');
-        image.src = badge.image_path;
-        image.alt = '';
-        button.append(image);
-        button.addEventListener('click', () => showBadgeDetails(badge));
-        badgeGrid.append(button);
+        button.type = 'button'; button.title = badge.name; button.setAttribute('aria-label', `Badge: ${badge.name}`);
+        const image = node('img'); image.src = badge.image_path; image.alt = '';
+        button.append(image); button.addEventListener('click', () => showBadgeDetails(badge)); badgeGrid.append(button);
     });
-    if (!earnedBadgeIds.size) badgeGrid.append(node('p', 'No badges earned yet.', 'notice'));
-    meta.append(badgeGrid);
-    profileRow.append(avatar, meta);
-    shell.append(profileRow);
-    const grid = node('section', undefined, 'stat-grid');
+    heroInfo.append(badgeGrid);
+    profileHero.append(heroAvatar, heroInfo);
+
+    const actions = node('nav', undefined, 'profile-action-bar');
+    const viewStats = node('a', 'View Stats', 'profile-action profile-action-orange'); viewStats.href = '#profile-stats';
+    const trade = node('a', 'Trade', 'profile-action profile-action-green'); trade.href = 'bazaar.html';
+    const giveaways = node('a', 'Giveaways', 'profile-action profile-action-pink'); giveaways.href = 'news.html';
+    const claim = node('button', 'Claim Tokens', 'profile-action profile-action-lime'); claim.type = 'button';
+    claim.addEventListener('click', async () => {
+        claim.disabled = true;
+        const { data, error } = await supabase.rpc('claim_daily_tokens');
+        claim.disabled = false;
+        if (error) setNotice(error.message, 'error');
+        else {
+            stats.tokens = data.tokens;
+            document.getElementById('stat-tokens').textContent = money(data.tokens);
+            setNotice(data.claimed ? 'Tokens claimed.' : 'You already claimed tokens today.', data.claimed ? 'success' : '');
+        }
+    });
+    actions.append(viewStats, trade, giveaways, claim);
+    shell.append(profileHero, actions);
+
+    const searchForm = node('form', undefined, 'stats-player-search');
+    searchForm.innerHTML = '<label class="sr-only" for="stats-search-name">Search player username</label><input id="stats-search-name" name="username" minlength="3" maxlength="24" pattern="[A-Za-z0-9_]{3,24}" placeholder="Search player" required><button class="search-icon-button" type="submit" aria-label="Search player"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.8"/><path d="m16 16 5 5"/></svg></button>';
+    searchForm.addEventListener('submit', (event) => {
+        event.preventDefault();
+        const username = new FormData(searchForm).get('username').toString().trim();
+        window.location.assign(`player.html?username=${encodeURIComponent(username)}`);
+    });
+    shell.append(searchForm);
+
+    const statsHeading = node('h2', 'Stats', 'section-tag');
+    statsHeading.id = 'profile-stats';
+    shell.append(statsHeading);
+    const grid = node('section', undefined, 'stat-grid profile-stat-grid');
     const cards = [
-        ['Tokens', 'tokenIcon.webp', stats.tokens],
+        ['Tokens', 'tokenIcon.webp', stats.tokens, 'stat-tokens'],
         ['Blooks Unlocked', 'unlockIcon.webp', `${stats.blooks_unlocked} / ${stats.total_blooks}`],
-        ['Packs Opened', 'openedIcon.webp', stats.packs_opened]
+        ['Packs Opened', 'openedIcon.webp', stats.packs_opened],
+        ['Messages Sent', 'chat', messagesSent || 0]
     ];
-    cards.forEach(([label, imagePath, value]) => {
+    cards.forEach(([label, imagePath, value, id]) => {
         const card = node('article', undefined, 'stat-card');
-        const image = node('img'); image.className = 'stat-icon'; image.src = `assets/badges/${imagePath}`; image.alt = '';
+        let image;
+        if (imagePath === 'chat') {
+            image = node('span', undefined, 'stat-icon stat-icon-chat');
+            image.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v12H9l-5 3V5Z"/></svg>';
+        } else {
+            image = node('img'); image.className = 'stat-icon'; image.src = `assets/badges/${imagePath}`; image.alt = '';
+        }
         const formattedValue = typeof value === 'number' ? money(value) : value;
-        const text = node('div'); text.append(node('p', label, 'stat-label'), node('p', formattedValue, 'stat-value'));
+        const valueNode = node('p', formattedValue, `stat-value${id ? ` ${id}` : ''}`);
+        if (id) valueNode.id = id;
+        const text = node('div'); text.append(node('p', label, 'stat-label'), valueNode);
         card.append(image, text, node('span', undefined, 'stat-balance'));
         grid.append(card);
     });
     shell.append(grid);
-    const actions = node('div', undefined, 'stats-actions');
-    const searchButton = node('button', 'Search Player', 'button-primary');
-    searchButton.type = 'button';
-    searchButton.addEventListener('click', () => {
-        document.getElementById('player-search-results').replaceChildren();
-        playerSearchDialog.showModal();
-        playerSearchDialog.querySelector('[name="username"]').focus();
+
+    const socialGrid = node('section', undefined, 'social-panels');
+    const friendsPanel = node('section', undefined, 'social-panel');
+    friendsPanel.append(node('h2', 'Friends', 'section-tag'));
+    const friendGrid = node('div', undefined, 'friend-grid');
+    relationships.forEach((relationship) => {
+        const friendId = relationship.requester_id === user.id ? relationship.recipient_id : relationship.requester_id;
+        const friend = peopleById.get(friendId);
+        if (friend) friendGrid.append(createPlayerCard(friend));
     });
-    actions.append(searchButton);
-    shell.append(actions);
+    if (!relationships.length) friendGrid.append(node('p', 'No friends yet.', 'empty-note'));
+    friendsPanel.append(friendGrid);
+
+    const requestsPanel = node('section', undefined, 'social-panel');
+    requestsPanel.append(node('h2', 'Requests', 'section-tag'));
+    const requestGrid = node('div', undefined, 'request-grid');
+    requests.forEach((request) => {
+        const person = peopleById.get(request.requester_id);
+        if (!person) return;
+        const card = createPlayerCard(person);
+        const controls = node('div', undefined, 'request-controls');
+        const accept = node('button', 'Accept', 'mini-action mini-action-accept'); accept.type = 'button';
+        const decline = node('button', '×', 'mini-action mini-action-decline'); decline.type = 'button'; decline.setAttribute('aria-label', `Decline request from ${person.username}`);
+        accept.addEventListener('click', () => respondToFriendRequest(request.id, true));
+        decline.addEventListener('click', () => respondToFriendRequest(request.id, false));
+        controls.append(accept, decline); card.append(controls); requestGrid.append(card);
+    });
+    if (!requests.length) requestGrid.append(node('p', 'No requests.', 'empty-note'));
+    requestsPanel.append(requestGrid);
+    socialGrid.append(friendsPanel, requestsPanel);
+    shell.append(socialGrid);
     content.replaceChildren(shell);
 }
 
-document.getElementById('player-search-form').addEventListener('submit', async (event) => {
-    event.preventDefault();
-    const form = event.currentTarget;
-    const username = new FormData(form).get('username').toString().trim().toLowerCase();
-    const results = document.getElementById('player-search-results');
-    results.replaceChildren(node('p', 'Searching...', 'notice'));
+function createPlayerCard(profile) {
+    const card = node('a', undefined, 'friend-card');
+    card.href = `player.html?username=${encodeURIComponent(profile.username)}`;
+    const avatar = node('img'); avatar.src = profile.avatar_path || 'assets/badges/Gold%20Doubloon.webp'; avatar.alt = '';
+    card.append(avatar, node('span', profile.username));
+    return card;
+}
 
-    const { data: profile, error: profileError } = await supabase
-        .from('profiles')
-        .select('id, username, avatar_path')
-        .ilike('username', username)
-        .maybeSingle();
+async function respondToFriendRequest(requestId, accept) {
+    const { error } = await supabase.rpc('respond_friend_request', { p_request_id: requestId, p_accept: accept });
+    if (error) setNotice(error.message, 'error');
+    else window.location.reload();
+}
 
-    if (profileError) {
-        results.replaceChildren(node('p', profileError.message, 'notice'));
-        return;
-    }
-    if (!profile) {
-        results.replaceChildren(node('p', 'No player found with that username.', 'notice'));
-        return;
-    }
+async function renderPlayer(user) {
+    const username = new URLSearchParams(window.location.search).get('username')?.trim().toLowerCase();
+    if (!username || !/^[a-z0-9_]{3,24}$/.test(username)) throw new Error('Enter a valid player username.');
+    const { data: profile, error: profileError } = await supabase.from('profiles').select('id, username, avatar_path, created_at').eq('username', username).maybeSingle();
+    if (profileError) throw profileError;
+    if (!profile) { content.replaceChildren(node('p', 'No player found with that username.', 'empty-note')); return; }
 
-    const { data: earnedRows, error: badgesError } = await supabase
-        .from('user_badges')
-        .select('badges(id, name, description, image_path)')
-        .eq('user_id', profile.id);
+    const [{ data: rows, error: badgeError }, { data: stats, error: statsError }, { data: existingRequest, error: requestError }] = await Promise.all([
+        supabase.from('user_badges').select('badges(id, name, description, image_path)').eq('user_id', profile.id),
+        supabase.from('player_stats').select('tokens, blooks_unlocked, total_blooks, packs_opened').eq('user_id', profile.id).single(),
+        supabase.from('friendships').select('id').eq('requester_id', user.id).eq('recipient_id', profile.id).eq('status', 'pending').maybeSingle()
+    ]);
+    if (badgeError || statsError || requestError) throw badgeError || statsError || requestError;
 
-    if (badgesError) {
-        results.replaceChildren(node('p', badgesError.message, 'notice'));
-        return;
-    }
-
-    const player = node('article', undefined, 'public-player');
-    const heading = node('div', undefined, 'public-player-heading');
-    const avatar = node('img', undefined, 'public-player-avatar');
-    avatar.src = profile.avatar_path || 'assets/badges/Gold%20Doubloon.webp';
-    avatar.alt = '';
-    heading.append(avatar, node('h3', profile.username, 'public-player-name'));
-    player.append(heading);
-
-    const badgeGrid = node('div', undefined, 'badge-grid');
-    const earnedBadges = earnedRows.map((row) => row.badges).filter(Boolean);
-    if (!earnedBadges.length) badgeGrid.append(node('p', 'No badges earned yet.', 'notice'));
-    earnedBadges.forEach((badge) => {
-        const button = node('button', undefined, 'badge-button');
-        button.type = 'button';
-        button.setAttribute('aria-label', `Earned badge: ${badge.name}`);
-        button.title = badge.name;
-        const image = node('img');
-        image.src = badge.image_path;
-        image.alt = '';
-        button.append(image);
-        button.addEventListener('click', () => showBadgeDetails(badge));
-        badgeGrid.append(button);
+    const badges = rows.map((row) => row.badges).filter(Boolean);
+    const root = node('section', undefined, 'searched-player-page');
+    const hero = node('header', undefined, 'searched-player-hero');
+    const back = node('a', '← Back to Stats', 'button-secondary'); back.href = 'stats.html';
+    const avatar = node('img'); avatar.src = profile.avatar_path || 'assets/badges/Gold%20Doubloon.webp'; avatar.alt = `${profile.username} profile picture`;
+    const heading = node('div'); heading.append(node('h2', profile.username), node('p', `Member since ${new Date(profile.created_at).toLocaleDateString()}`));
+    hero.append(back, avatar, heading);
+    const addFriend = node('button', existingRequest ? 'Request Sent' : 'Add Friend', 'button-primary');
+    addFriend.type = 'button'; addFriend.disabled = Boolean(existingRequest) || profile.id === user.id;
+    addFriend.addEventListener('click', async () => {
+        const { error } = await supabase.rpc('send_friend_request', { p_username: profile.username });
+        if (error) setNotice(error.message, 'error');
+        else { addFriend.textContent = 'Request Sent'; addFriend.disabled = true; }
     });
-    player.append(badgeGrid);
-    results.replaceChildren(player);
-});
+    hero.append(addFriend); root.append(hero);
+
+    const statsGrid = node('section', undefined, 'stat-grid public-player-stats');
+    [['Tokens', stats.tokens], ['Blooks', `${stats.blooks_unlocked} / ${stats.total_blooks}`], ['Packs Opened', stats.packs_opened]].forEach(([label, value]) => {
+        const card = node('article', undefined, 'stat-card'); card.append(node('p', label, 'stat-label'), node('p', typeof value === 'number' ? money(value) : value, 'stat-value')); statsGrid.append(card);
+    });
+    root.append(statsGrid, node('h2', 'Badges', 'section-tag'));
+    const badgeGrid = node('div', undefined, 'public-badge-grid');
+    badges.forEach((badge) => {
+        const button = node('button', undefined, 'badge-button'); button.type = 'button'; button.title = badge.name;
+        button.setAttribute('aria-label', `Badge: ${badge.name}`);
+        const image = node('img'); image.src = badge.image_path; image.alt = '';
+        button.append(image); button.addEventListener('click', () => showBadgeDetails(badge)); badgeGrid.append(button);
+    });
+    root.append(badgeGrid);
+    if (!badges.length) root.append(node('p', 'No badges to show.', 'empty-note'));
+    content.replaceChildren(root);
+}
 
 async function renderLeaderboard() {
     const { data, error } = await supabase.from('leaderboard').select('username, avatar_path, tokens, blooks_unlocked, packs_opened').order('tokens', { ascending: false }).limit(50);
@@ -256,31 +336,158 @@ async function renderChat(user) {
 }
 
 async function renderClans(user) {
-    setContent('<section class="surface panel"><form class="inline-form" id="clan-form"><label class="field"><span>Start a clan</span><input name="name" maxlength="32" required placeholder="Clan name"></label><button class="button-primary" type="submit">Create</button></form></section><section class="data-grid" id="clan-list" style="margin-top:14px"></section>');
+    setContent('<section class="surface panel clan-create-panel"><form class="inline-form" id="clan-form"><label class="field"><span>Create a clan</span><input name="name" minlength="3" maxlength="32" required placeholder="Clan name"></label><button class="button-primary" type="submit">Create Clan</button></form></section><section class="clan-invitations" id="clan-invitations"></section><section class="data-grid clan-list" id="clan-list"></section>');
     const list = document.getElementById('clan-list');
-    const load = async () => {
-        const { data, error } = await supabase.from('clan_roster').select('*').order('member_count', { ascending: false }).limit(50);
-        if (error) throw error;
-        list.replaceChildren();
-        data.forEach((clan) => {
-            const item = node('article', undefined, 'item-card');
-            item.append(node('h3', clan.name), node('p', `${clan.member_count} members`));
-            const join = node('button', 'Join', 'button-secondary'); join.type = 'button';
-            join.addEventListener('click', async () => {
-                const { error: joinError } = await supabase.rpc('join_clan', { p_clan_id: clan.id });
-                if (joinError) setNotice(joinError.message, 'error'); else { setNotice('Joined clan.', 'success'); await load(); }
+    const [{ data: clans, error: clansError }, { data: invitations, error: invitationsError }] = await Promise.all([
+        supabase.from('clan_roster').select('*').order('member_count', { ascending: false }).limit(50),
+        supabase.from('clan_invites').select('id, clan_id, created_at, clans(name)').eq('invitee_id', user.id).eq('status', 'pending').order('created_at', { ascending: false })
+    ]);
+    if (clansError || invitationsError) throw clansError || invitationsError;
+
+    const invites = document.getElementById('clan-invitations');
+    if (invitations.length) {
+        invites.append(node('h2', 'Invitations', 'section-tag'));
+        invitations.forEach((invite) => {
+            const card = node('article', undefined, 'invitation-card');
+            card.append(node('span', invite.clans.name));
+            const accept = node('button', 'Accept Invitation', 'button-primary'); accept.type = 'button';
+            accept.addEventListener('click', async () => {
+                accept.disabled = true;
+                const { error } = await supabase.rpc('join_clan', { p_clan_id: invite.clan_id });
+                if (error) { accept.disabled = false; setNotice(error.message, 'error'); }
+                else window.location.assign(`clan.html?clan=${encodeURIComponent(invite.clan_id)}`);
             });
-            item.append(join); list.append(item);
+            card.append(accept); invites.append(card);
         });
-    };
-    await load();
+    }
+
+    if (!clans.length) list.append(node('p', 'No clans yet.', 'empty-note'));
+    clans.forEach((clan) => {
+        const card = node('a', undefined, 'clan-list-card');
+        card.href = `clan.html?clan=${encodeURIComponent(clan.id)}`;
+        card.append(node('span', '♜', 'clan-card-emblem'), node('span', undefined, 'clan-list-copy'));
+        card.lastElementChild.append(node('strong', clan.name), node('small', `${clan.member_count} members`));
+        card.append(node('span', 'View Clan', 'clan-card-open'));
+        list.append(card);
+    });
+
     document.getElementById('clan-form').addEventListener('submit', async (event) => {
         event.preventDefault();
         const form = event.currentTarget;
         const name = new FormData(form).get('name').toString().trim();
-        const { error } = await supabase.rpc('create_clan', { p_name: name });
-        if (error) setNotice(error.message, 'error'); else { setNotice('Clan created.', 'success'); form.reset(); await load(); }
+        const { data: clanId, error } = await supabase.rpc('create_clan', { p_name: name });
+        if (error) setNotice(error.message, 'error');
+        else window.location.assign(`clan.html?clan=${encodeURIComponent(clanId)}`);
     });
+}
+
+async function renderClanDetail(user) {
+    const clanId = new URLSearchParams(window.location.search).get('clan');
+    if (!clanId || !/^[0-9a-f-]{36}$/i.test(clanId)) throw new Error('Clan not found.');
+    const [{ data: clan, error: clanError }, { data: memberships, error: memberError }] = await Promise.all([
+        supabase.from('clans').select('id, name, description, owner_id, created_at').eq('id', clanId).maybeSingle(),
+        supabase.from('clan_members').select('user_id, role').eq('clan_id', clanId)
+    ]);
+    if (clanError || memberError) throw clanError || memberError;
+    if (!clan) throw new Error('Clan not found.');
+
+    const memberIds = memberships.map((member) => member.user_id);
+    const [{ data: profiles, error: profilesError }, { data: messages, error: messagesError }] = await Promise.all([
+        memberIds.length ? supabase.from('profiles').select('id, username, avatar_path').in('id', memberIds) : Promise.resolve({ data: [], error: null }),
+        supabase.from('clan_messages').select('id, author_id, body, created_at').eq('clan_id', clanId).order('created_at', { ascending: true }).limit(60)
+    ]);
+    if (profilesError) throw profilesError;
+    const profileMap = new Map(profiles.map((profile) => [profile.id, profile]));
+    const currentMembership = memberships.find((member) => member.user_id === user.id);
+    const isOwner = currentMembership?.role === 'owner';
+
+    const root = node('section', undefined, 'clan-detail-page');
+    const topbar = node('header', undefined, 'clan-topbar');
+    const controls = node('nav', undefined, 'profile-top-actions');
+    const back = node('a', '↶', 'profile-icon-button'); back.href = 'clans.html'; back.setAttribute('aria-label', 'Back to clans');
+    const settings = node('a', '⚙', 'profile-icon-button'); settings.href = 'settings.html'; settings.setAttribute('aria-label', 'Settings');
+    const news = node('a', '▤', 'profile-icon-button'); news.href = 'news.html'; news.setAttribute('aria-label', 'News');
+    controls.append(back, settings, news);
+    topbar.append(controls, node('h1', clan.name, 'clan-top-title'), node('span', 'BLOCKET', 'clan-top-brand'));
+    root.append(topbar);
+
+    const columns = node('div', undefined, 'clan-detail-columns');
+    const left = node('aside', undefined, 'clan-left-rail');
+    const shield = node('section', undefined, 'clan-side-tile');
+    shield.append(node('span', '◇', 'clan-side-symbol'), node('strong', 'Not Shielded'));
+    const disguise = node('section', undefined, 'clan-side-tile');
+    disguise.append(node('span', '◉', 'clan-side-symbol'), node('strong', 'Not Disguised'));
+    const inventory = node('a', undefined, 'clan-side-tile clan-inventory-tile'); inventory.href = 'inventory.html';
+    inventory.append(node('span', '▧', 'clan-side-symbol'), node('strong', 'Inventory'));
+    left.append(shield, disguise, inventory);
+
+    const center = node('section', undefined, 'clan-center-column');
+    const overview = node('section', undefined, 'clan-overview');
+    const banner = node('div', undefined, 'clan-banner');
+    banner.append(node('span', '♜', 'clan-crest'), node('span', `${memberships.length} Members`, 'clan-member-count'));
+    const summary = node('div', undefined, 'clan-summary');
+    summary.append(node('h2', clan.name, 'clan-name'), node('p', clan.description || 'Welcome to the clan.', 'clan-description'));
+    const owner = profileMap.get(clan.owner_id);
+    summary.append(node('p', owner ? `♟ ${owner.username}` : '', 'clan-owner-line'));
+    overview.append(banner, summary);
+
+    if (isOwner) {
+        const invitePanel = node('section', undefined, 'surface panel clan-invite-panel');
+        invitePanel.append(node('h2', 'Invite a player', 'panel-title'));
+        const inviteForm = node('form', undefined, 'inline-form');
+        inviteForm.innerHTML = '<label class="field"><span>Username</span><input name="username" minlength="3" maxlength="24" pattern="[A-Za-z0-9_]{3,24}" required placeholder="Player username"></label><button class="button-primary" type="submit">Send Invitation</button>';
+        inviteForm.addEventListener('submit', async (event) => {
+            event.preventDefault();
+            const form = event.currentTarget;
+            const username = new FormData(form).get('username').toString().trim();
+            const { error } = await supabase.rpc('invite_to_clan', { p_clan_id: clan.id, p_username: username });
+            if (error) setNotice(error.message, 'error'); else { setNotice('Invitation sent.', 'success'); form.reset(); }
+        });
+        invitePanel.append(inviteForm); center.append(invitePanel);
+    } else if (!currentMembership) {
+        center.append(node('p', 'Clan membership is by invitation only.', 'invitation-required'));
+    }
+
+    const activity = node('section', undefined, 'clan-activity');
+    if (currentMembership) {
+        const messageList = node('div', undefined, 'clan-message-list');
+        messages.forEach((message) => {
+            const messageProfile = profileMap.get(message.author_id);
+            const entry = node('article', undefined, 'clan-message');
+            entry.append(node('strong', messageProfile?.username || 'Member'), node('p', message.body));
+            messageList.append(entry);
+        });
+        if (!messages.length) messageList.append(node('p', 'No clan messages yet.', 'empty-note'));
+        activity.append(messageList);
+        const messageForm = node('form', undefined, 'inline-form clan-message-form');
+        messageForm.innerHTML = '<label class="field"><span>Message</span><input name="body" maxlength="500" required placeholder="Write to your clan"></label><button class="button-primary" type="submit">Send</button>';
+        messageForm.addEventListener('submit', async (event) => {
+            event.preventDefault();
+            const form = event.currentTarget;
+            const body = new FormData(form).get('body').toString().trim();
+            const { error } = await supabase.from('clan_messages').insert({ clan_id: clan.id, author_id: user.id, body });
+            if (error) setNotice(error.message, 'error'); else window.location.reload();
+        });
+        activity.append(messageForm);
+    }
+    center.append(overview, activity);
+
+    const membersPanel = node('section', undefined, 'clan-members-panel');
+    membersPanel.append(node('h2', 'Clan Members', 'section-tag'));
+    memberships.forEach((member) => {
+        const memberProfile = profileMap.get(member.user_id);
+        if (!memberProfile) return;
+        const card = node('a', undefined, 'clan-member-card');
+        card.href = `player.html?username=${encodeURIComponent(memberProfile.username)}`;
+        const avatar = node('img'); avatar.src = memberProfile.avatar_path || 'assets/badges/Gold%20Doubloon.webp'; avatar.alt = '';
+        const details = node('span', undefined, 'clan-member-details');
+        details.append(node('strong', memberProfile.username), node('small', member.role === 'owner' ? 'Clan Owner' : 'Clan Member'));
+        card.append(avatar, details);
+        membersPanel.append(card);
+    });
+    columns.append(left, center, membersPanel);
+    root.append(columns);
+    content.replaceChildren(root);
 }
 
 function listingCard(listing, onBuy) {
@@ -292,17 +499,72 @@ function listingCard(listing, onBuy) {
 }
 
 async function renderMarket() {
+    const pricing = [
+        {
+            name: '1H Booster',
+            price: '$9.99',
+            accent: 'shop-card--blue',
+            tag: 'Boost all the chances of blocks by 2x more for EVERYONE! This boosts for 1 hour.',
+            reward: '+20,000 tokens',
+            action: 'Buy Now',
+            buttonClass: 'shop-button--blue',
+            footer: 'By clicking "Buy Now", you agree to Blocket\'s Terms of Service, End User License Agreement, and Privacy Policy. This is a one-time charge, you will NOT be charged monthly.'
+        },
+        {
+            name: 'Plus',
+            price: '$14.99',
+            accent: 'shop-card--mid',
+            tag: 'Access To Bonners Exclusive Ornaments Exclusive Chat Colors More Bazaar Listings Access To Creating Clans Upload Files in Chat Use Block Emojis Discard Plus Role',
+            reward: '+30,000 tokens',
+            action: 'Already Owned',
+            buttonClass: 'shop-button--dark',
+            footer: 'By clicking "Buy Now", you agree to Blocket\'s Terms of Service, End User License Agreement, and Privacy Policy. This is a one-time charge, you will NOT be charged monthly.'
+        },
+        {
+            name: '3H Booster',
+            price: '$14.99',
+            accent: 'shop-card--gold',
+            tag: 'Boost all the chances of blocks by 2x more for EVERYONE! This boosts for 3 hours.',
+            reward: '+30,000 tokens',
+            action: 'Buy Now',
+            buttonClass: 'shop-button--gold',
+            footer: 'By clicking "Buy Now", you agree to Blocket\'s Terms of Service, End User License Agreement, and Privacy Policy. This is a one-time charge, you will NOT be charged monthly.'
+        }
+    ];
+
+    const shop = node('section', undefined, 'shop-shell');
+    pricing.forEach((plan) => {
+        const card = node('article', undefined, `shop-card ${plan.accent}`);
+        if (plan.name === 'Plus') {
+            const badge = node('div', 'Plus', 'shop-card-badge');
+            card.append(badge);
+        }
+        const title = node('h2', plan.name, 'shop-card-title');
+        const price = node('div', plan.price, 'shop-price');
+        const feature = node('p', plan.tag, 'shop-copy');
+        const token = node('div', plan.reward, 'shop-token');
+        const button = node('button', plan.action, `shop-button ${plan.buttonClass}`); button.type = 'button';
+        const divider = node('div', undefined, 'shop-divider');
+        const note = node('p', plan.footer, 'shop-legal');
+        card.append(title, price, feature, token, button, divider, note);
+        shop.append(card);
+    });
+
+    const footerNote = node('p', 'You have spent $70 on Blocket.\nYou already have unlocked the Big Spender badge!', 'shop-footer-note');
+    content.replaceChildren(shop, footerNote);
+
     const results = await supabase.from('market_listings').select('id, quantity, price_each, seller_id, profiles(username), blooks(name)').eq('status', 'active').order('created_at', { ascending: false }).limit(60);
     if (results.error) throw results.error;
-    const grid = node('section', undefined, 'data-grid');
-    if (!results.data.length) grid.append(empty('No blooks are listed yet. Visit the Bazaar to list one.'));
-    results.data.forEach((listing) => grid.append(listingCard(listing, async (item) => {
-        const { error } = await supabase.rpc('purchase_listing', { p_listing_id: item.id, p_quantity: 1 });
-        if (error) setNotice(error.message, 'error'); else { setNotice('Purchase complete.', 'success'); window.location.reload(); }
-    })));
-    const section = node('section');
-    section.append(node('h2', 'Player listings', 'panel-title'), grid);
-    content.append(section);
+    if (results.data.length) {
+        const grid = node('section', undefined, 'data-grid market-listings');
+        results.data.forEach((listing) => grid.append(listingCard(listing, async (item) => {
+            const { error } = await supabase.rpc('purchase_listing', { p_listing_id: item.id, p_quantity: 1 });
+            if (error) setNotice(error.message, 'error'); else { setNotice('Purchase complete.', 'success'); window.location.reload(); }
+        })));
+        const section = node('section', undefined, 'market-listings-wrap');
+        section.append(node('h2', 'Player listings', 'panel-title'), grid);
+        content.append(section);
+    }
 }
 
 async function renderBlooks() {
@@ -485,9 +747,11 @@ async function boot() {
     document.title = `Blocket ${title}`;
     try {
         if (page === 'stats') await renderStats(user);
+        else if (page === 'player') await renderPlayer(user);
         else if (page === 'leaderboard') await renderLeaderboard();
         else if (page === 'chat') await renderChat(user);
         else if (page === 'clans') await renderClans(user);
+        else if (page === 'clan-detail') await renderClanDetail(user);
         else if (page === 'market') await renderMarketRoot(user);
         else if (page === 'blooks') await renderBlooks();
         else if (page === 'inventory') await renderInventory();

@@ -12,6 +12,20 @@ create table if not exists public.profiles (
 alter table public.profiles
     add column if not exists avatar_path text not null default 'assets/badges/Gold Doubloon.webp';
 
+create table if not exists public.friendships (
+    id uuid primary key default gen_random_uuid(),
+    requester_id uuid not null references public.profiles (id) on delete cascade,
+    recipient_id uuid not null references public.profiles (id) on delete cascade,
+    status text not null default 'pending' check (status in ('pending', 'accepted')),
+    created_at timestamptz not null default now(),
+    accepted_at timestamptz,
+    check (requester_id <> recipient_id),
+    unique (requester_id, recipient_id)
+);
+
+create index if not exists friendships_recipient_status_idx
+    on public.friendships (recipient_id, status);
+
 create table if not exists public.player_stats (
     user_id uuid primary key references public.profiles (id) on delete cascade,
     packs_opened bigint not null default 0 check (packs_opened >= 0),
@@ -26,6 +40,13 @@ alter table public.player_stats
     add column if not exists blooks_unlocked integer not null default 0 check (blooks_unlocked >= 0),
     add column if not exists total_blooks integer not null default 917 check (total_blooks > 0),
     add column if not exists tokens bigint not null default 0 check (tokens >= 0);
+
+create table if not exists public.token_claims (
+    user_id uuid not null references public.profiles (id) on delete cascade,
+    claim_day date not null,
+    amount bigint not null check (amount > 0),
+    primary key (user_id, claim_day)
+);
 
 create table if not exists public.blooks (
     id text primary key,
@@ -91,6 +112,24 @@ create table if not exists public.clan_members (
     role text not null default 'member' check (role in ('owner', 'member')),
     joined_at timestamptz not null default now(),
     primary key (clan_id, user_id)
+);
+
+create table if not exists public.clan_invites (
+    id uuid primary key default gen_random_uuid(),
+    clan_id uuid not null references public.clans (id) on delete cascade,
+    invitee_id uuid not null references public.profiles (id) on delete cascade,
+    inviter_id uuid not null references public.profiles (id) on delete cascade,
+    status text not null default 'pending' check (status in ('pending', 'accepted', 'declined')),
+    created_at timestamptz not null default now(),
+    unique (clan_id, invitee_id)
+);
+
+create table if not exists public.clan_messages (
+    id bigint generated always as identity primary key,
+    clan_id uuid not null references public.clans (id) on delete cascade,
+    author_id uuid not null references public.profiles (id) on delete cascade,
+    body text not null check (char_length(body) between 1 and 500),
+    created_at timestamptz not null default now()
 );
 
 create table if not exists public.market_listings (
@@ -256,6 +295,10 @@ alter table public.clans enable row level security;
 alter table public.clan_members enable row level security;
 alter table public.market_listings enable row level security;
 alter table public.news_posts enable row level security;
+alter table public.friendships enable row level security;
+alter table public.token_claims enable row level security;
+alter table public.clan_invites enable row level security;
+alter table public.clan_messages enable row level security;
 
 drop policy if exists "Users can read their own profile" on public.profiles;
 create policy "Users can read their own profile"
@@ -342,6 +385,50 @@ on public.clans for select to authenticated using (true);
 drop policy if exists "Authenticated users can read clan memberships" on public.clan_members;
 create policy "Authenticated users can read clan memberships"
 on public.clan_members for select to authenticated using (true);
+
+drop policy if exists "Users can read their own friendships" on public.friendships;
+create policy "Users can read their own friendships"
+on public.friendships for select to authenticated
+using ((select auth.uid()) in (requester_id, recipient_id));
+
+drop policy if exists "Users can read their own token claims" on public.token_claims;
+create policy "Users can read their own token claims"
+on public.token_claims for select to authenticated
+using ((select auth.uid()) = user_id);
+
+drop policy if exists "Invitees and clan owners can read invitations" on public.clan_invites;
+create policy "Invitees and clan owners can read invitations"
+on public.clan_invites for select to authenticated
+using (
+    invitee_id = (select auth.uid())
+    or exists (
+        select 1 from public.clan_members as membership
+        where membership.clan_id = clan_invites.clan_id
+            and membership.user_id = (select auth.uid())
+            and membership.role = 'owner'
+    )
+);
+
+drop policy if exists "Clan members can read clan messages" on public.clan_messages;
+create policy "Clan members can read clan messages"
+on public.clan_messages for select to authenticated
+using (exists (
+    select 1 from public.clan_members as membership
+    where membership.clan_id = clan_messages.clan_id
+        and membership.user_id = (select auth.uid())
+));
+
+drop policy if exists "Clan members can write their own messages" on public.clan_messages;
+create policy "Clan members can write their own messages"
+on public.clan_messages for insert to authenticated
+with check (
+    author_id = (select auth.uid())
+    and exists (
+        select 1 from public.clan_members as membership
+        where membership.clan_id = clan_messages.clan_id
+            and membership.user_id = (select auth.uid())
+    )
+);
 
 drop policy if exists "Authenticated users can read active market listings" on public.market_listings;
 create policy "Authenticated users can read active market listings"
@@ -465,11 +552,149 @@ language plpgsql
 security definer
 set search_path = ''
 as $$
+declare
+    current_user_id uuid := auth.uid();
+    pending_invite_id uuid;
 begin
-    if auth.uid() is null then raise exception 'Sign in to join a clan.'; end if;
+    if current_user_id is null then raise exception 'Sign in to accept a clan invitation.'; end if;
+
+    select id into pending_invite_id
+    from public.clan_invites
+    where clan_id = p_clan_id
+        and invitee_id = current_user_id
+        and status = 'pending'
+    for update;
+
+    if not found then raise exception 'You must be invited before joining this clan.'; end if;
+
     insert into public.clan_members (clan_id, user_id)
-    values (p_clan_id, auth.uid())
+    values (p_clan_id, current_user_id)
     on conflict (clan_id, user_id) do nothing;
+
+    update public.clan_invites
+    set status = 'accepted'
+    where id = pending_invite_id;
+end;
+$$;
+
+create or replace function public.invite_to_clan(p_clan_id uuid, p_username text)
+returns uuid
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+    current_user_id uuid := auth.uid();
+    invited_user_id uuid;
+    invite_id uuid;
+    member_role text;
+begin
+    if current_user_id is null then raise exception 'Sign in to invite a player.'; end if;
+
+    select role into member_role
+    from public.clan_members
+    where clan_id = p_clan_id and user_id = current_user_id;
+    if not found or member_role <> 'owner' then raise exception 'Only the clan owner can send invitations.'; end if;
+
+    select id into invited_user_id
+    from public.profiles
+    where username = lower(trim(p_username));
+    if not found then raise exception 'No player found with that username.'; end if;
+    if invited_user_id = current_user_id then raise exception 'You are already in this clan.'; end if;
+    if exists (select 1 from public.clan_members where clan_id = p_clan_id and user_id = invited_user_id) then
+        raise exception 'That player is already a clan member.';
+    end if;
+
+    insert into public.clan_invites (clan_id, invitee_id, inviter_id)
+    values (p_clan_id, invited_user_id, current_user_id)
+    returning id into invite_id;
+    return invite_id;
+end;
+$$;
+
+create or replace function public.send_friend_request(p_username text)
+returns uuid
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+    current_user_id uuid := auth.uid();
+    target_user_id uuid;
+    existing public.friendships%rowtype;
+    request_id uuid;
+begin
+    if current_user_id is null then raise exception 'Sign in to add a friend.'; end if;
+    select id into target_user_id from public.profiles where username = lower(trim(p_username));
+    if not found then raise exception 'No player found with that username.'; end if;
+    if target_user_id = current_user_id then raise exception 'You cannot add yourself.'; end if;
+
+    select * into existing
+    from public.friendships
+    where (requester_id = current_user_id and recipient_id = target_user_id)
+        or (requester_id = target_user_id and recipient_id = current_user_id)
+    for update;
+
+    if found and existing.status = 'accepted' then raise exception 'You are already friends.'; end if;
+    if found and existing.requester_id = current_user_id then raise exception 'Friend request already sent.'; end if;
+    if found then raise exception 'This player already sent you a request.'; end if;
+
+    insert into public.friendships (requester_id, recipient_id)
+    values (current_user_id, target_user_id)
+    returning id into request_id;
+    return request_id;
+end;
+$$;
+
+create or replace function public.respond_friend_request(p_request_id uuid, p_accept boolean)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+    if auth.uid() is null then raise exception 'Sign in to respond to a friend request.'; end if;
+
+    if p_accept then
+        update public.friendships
+        set status = 'accepted', accepted_at = now()
+        where id = p_request_id and recipient_id = auth.uid() and status = 'pending';
+    else
+        delete from public.friendships
+        where id = p_request_id and recipient_id = auth.uid() and status = 'pending';
+    end if;
+
+    if not found then raise exception 'This friend request is no longer available.'; end if;
+end;
+$$;
+
+create or replace function public.claim_daily_tokens()
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+    current_user_id uuid := auth.uid();
+    updated_tokens bigint;
+begin
+    if current_user_id is null then raise exception 'Sign in to claim tokens.'; end if;
+
+    insert into public.token_claims (user_id, claim_day, amount)
+    values (current_user_id, (now() at time zone 'utc')::date, 100)
+    on conflict (user_id, claim_day) do nothing;
+
+    if not found then
+        select tokens into updated_tokens from public.player_stats where user_id = current_user_id;
+        return jsonb_build_object('claimed', false, 'tokens', updated_tokens);
+    end if;
+
+    update public.player_stats
+    set tokens = tokens + 100
+    where user_id = current_user_id
+    returning tokens into updated_tokens;
+
+    return jsonb_build_object('claimed', true, 'tokens', updated_tokens);
 end;
 $$;
 
@@ -610,12 +835,20 @@ $$;
 revoke all on function public.open_pack(text) from public;
 revoke all on function public.create_clan(text) from public;
 revoke all on function public.join_clan(uuid) from public;
+revoke all on function public.invite_to_clan(uuid, text) from public;
+revoke all on function public.send_friend_request(text) from public;
+revoke all on function public.respond_friend_request(uuid, boolean) from public;
+revoke all on function public.claim_daily_tokens() from public;
 revoke all on function public.create_market_listing(text, integer, bigint) from public;
 revoke all on function public.cancel_market_listing(uuid) from public;
 revoke all on function public.purchase_listing(uuid, integer) from public;
 grant execute on function public.open_pack(text) to authenticated;
 grant execute on function public.create_clan(text) to authenticated;
 grant execute on function public.join_clan(uuid) to authenticated;
+grant execute on function public.invite_to_clan(uuid, text) to authenticated;
+grant execute on function public.send_friend_request(text) to authenticated;
+grant execute on function public.respond_friend_request(uuid, boolean) to authenticated;
+grant execute on function public.claim_daily_tokens() to authenticated;
 grant execute on function public.create_market_listing(text, integer, bigint) to authenticated;
 grant execute on function public.cancel_market_listing(uuid) to authenticated;
 grant execute on function public.purchase_listing(uuid, integer) to authenticated;
@@ -632,6 +865,9 @@ grant select on public.chat_messages to authenticated;
 grant insert, delete on public.chat_messages to authenticated;
 grant usage, select on sequence public.chat_messages_id_seq to authenticated;
 grant select on public.clans, public.clan_members to authenticated;
+grant select on public.friendships, public.clan_invites, public.clan_messages, public.token_claims to authenticated;
+grant insert on public.clan_messages to authenticated;
+grant usage, select on sequence public.clan_messages_id_seq to authenticated;
 grant select on public.market_listings to authenticated;
 grant select on public.news_posts to authenticated;
 grant select on public.leaderboard, public.clan_roster to authenticated;

@@ -127,6 +127,199 @@ button { color: inherit; }
 
 .store-link:hover { background: var(--accent-bright); }
 
+body[data-page="market"] {
+    background:
+        linear-gradient(135deg, rgba(255, 255, 255, 0.06) 25%, transparent 25%) 0 0 / 36px 36px,
+        linear-gradient(225deg, rgba(255, 255, 255, 0.06) 25%, transparent 25%) 0 0 / 36px 36px,
+        linear-gradient(315deg, rgba(255, 255, 255, 0.04) 25%, transparent 25%) 0 0 / 36px 36px,
+        linear-gradient(45deg, rgba(255, 255, 255, 0.04) 25%, transparent 25%) 0 0 / 36px 36px,
+        #1a1c20;
+}
+
+body[data-page="market"] .app-main {
+    background: transparent;
+}
+
+body[data-page="market"] .page-wrap {
+    width: min(1120px, 100%);
+}
+
+body[data-page="market"] .page-kicker,
+body[data-page="market"] .page-title,
+body[data-page="market"] .page-subtitle {
+    display: none;
+}
+
+.shop-shell {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 24px;
+    align-items: stretch;
+    margin: 18px auto 28px;
+    max-width: 980px;
+}
+
+.shop-card {
+    position: relative;
+    display: flex;
+    min-height: 510px;
+    flex-direction: column;
+    justify-content: flex-start;
+    padding: 18px 18px 16px;
+    border-radius: 18px 18px 12px 12px;
+    box-shadow: 0 18px 30px rgb(0 0 0 / 30%);
+    color: white;
+    overflow: hidden;
+}
+
+.shop-card::before {
+    content: '';
+    position: absolute;
+    inset: 0 0 auto 0;
+    height: 16px;
+    background: rgb(255 255 255 / 10%);
+}
+
+.shop-card--blue {
+    background: linear-gradient(180deg, #2e84e5 0%, #2179d7 20%, #1c6ec9 100%);
+    box-shadow: 0 16px 24px rgb(32 103 181 / 32%);
+}
+
+.shop-card--mid {
+    background: linear-gradient(180deg, #00a7d8 0%, #00a7d8 18%, #0f7dcc 100%);
+    box-shadow: 0 16px 24px rgb(8 123 188 / 26%);
+}
+
+.shop-card--gold {
+    background: linear-gradient(180deg, #f7c435 0%, #f4ba1f 18%, #e7a00d 100%);
+    box-shadow: 0 16px 24px rgb(168 116 9 / 28%);
+}
+
+.shop-card-badge {
+    position: relative;
+    z-index: 1;
+    display: grid;
+    place-items: center;
+    width: calc(100% + 12px);
+    min-height: 72px;
+    margin: -18px -6px 12px;
+    border-radius: 16px 16px 0 0;
+    background: linear-gradient(90deg, #1b9ad8, #2a7ae7);
+    color: white;
+    font-size: clamp(2rem, 2vw, 2.5rem);
+    font-weight: 700;
+    letter-spacing: -0.04em;
+    box-shadow: inset 0 -4px 0 rgb(0 0 0 / 10%);
+}
+
+.shop-card-title {
+    margin: 0 0 10px;
+    color: white;
+    font-size: clamp(2rem, 2vw, 2.8rem);
+    font-weight: 700;
+    line-height: 1;
+    text-align: center;
+    text-shadow: 0 2px 0 rgb(0 0 0 / 15%);
+}
+
+.shop-price {
+    margin: 0 0 12px;
+    color: white;
+    font-size: clamp(3.1rem, 4vw, 4.4rem);
+    font-weight: 800;
+    letter-spacing: -0.06em;
+    line-height: .95;
+    text-align: center;
+    text-shadow: 0 3px 0 rgb(0 0 0 / 12%);
+}
+
+.shop-copy {
+    margin: 0 0 14px;
+    color: rgb(255 255 255 / 92%);
+    font-size: 1.08rem;
+    line-height: 1.5;
+    text-align: center;
+}
+
+.shop-token {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    margin: 0 auto 12px;
+    padding: 0 8px;
+    border-radius: 999px;
+    color: white;
+    font-size: clamp(1.1rem, 2vw, 1.9rem);
+    font-weight: 700;
+    text-align: center;
+}
+
+.shop-token::before {
+    content: '◈';
+    font-size: 1.1em;
+    filter: drop-shadow(0 1px 0 rgb(0 0 0 / 30%));
+}
+
+.shop-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    min-height: 52px;
+    margin-top: auto;
+    border: 0;
+    border-radius: 12px;
+    color: #ffffff;
+    font-size: 1.12rem;
+    font-weight: 700;
+    text-transform: none;
+    box-shadow: inset 0 -4px 0 rgb(0 0 0 / 10%);
+    cursor: pointer;
+}
+
+.shop-button--blue,
+.shop-button--gold {
+    background: rgba(255, 255, 255, 0.12);
+    border: 2px solid rgba(255, 255, 255, 0.28);
+}
+
+.shop-button--dark {
+    background: rgba(21, 86, 154, 0.35);
+    border: 2px solid rgba(255, 255, 255, 0.2);
+    color: white;
+}
+
+.shop-divider {
+    width: 100%;
+    height: 1px;
+    margin: 18px 0 12px;
+    border: 0;
+    background: rgba(255, 255, 255, 0.45);
+}
+
+.shop-legal {
+    margin: 0;
+    color: rgba(255, 255, 255, 0.8);
+    font-size: 0.8rem;
+    line-height: 1.3;
+    text-align: center;
+}
+
+.shop-footer-note {
+    margin: 4px auto 0;
+    color: white;
+    font-size: clamp(1.6rem, 2vw, 2.6rem);
+    font-weight: 700;
+    line-height: 1.25;
+    text-align: center;
+    white-space: pre-line;
+}
+
+.market-listings-wrap {
+    margin-top: 32px;
+}
+
 .sidebar-sign-out {
     width: 100%;
     min-height: 36px;
